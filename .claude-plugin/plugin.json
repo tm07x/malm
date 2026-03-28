@@ -1,0 +1,5 @@
+{
+  "name": "downloads-janitor",
+  "version": "1.0.0",
+  "description": "Organizes ~/Downloads using strict JSON rules"
+}
