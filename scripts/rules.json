@@ -1,0 +1,65 @@
+{
+  "source": "~/Downloads",
+  "keyword_rules": [
+    {
+      "id": "legal",
+      "pattern": "(?i)(stevning|forlik|klage|contract|agreement|settlement|claim|pant|sletting)",
+      "dest": "~/Documents/Legal"
+    },
+    {
+      "id": "finance",
+      "pattern": "(?i)(balance|faktura|invoice|regnskap|hovedbok|leverandør|avstemming|a-melding|lønn|payroll)",
+      "dest": "~/Documents/Finance"
+    },
+    {
+      "id": "microsoft",
+      "pattern": "(?i)(microsoft|azure|csp-auth|partner-program|msgraph)",
+      "dest": "~/Documents/Work/Microsoft"
+    }
+  ],
+  "extension_rules": [
+    {
+      "id": "installers",
+      "match": ["*.dmg", "*.iso", "*.pkg", "*.app"],
+      "dest": "~/Downloads/_Installers"
+    },
+    {
+      "id": "archives",
+      "match": ["*.zip", "*.tar", "*.tar.gz", "*.xz", "*.cpgz", "*.rar"],
+      "dest": "~/Downloads/_Archives"
+    },
+    {
+      "id": "images",
+      "match": ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.svg", "*.webp"],
+      "dest": "~/Documents/Images"
+    },
+    {
+      "id": "documents-pdf",
+      "match": ["*.pdf"],
+      "dest": "~/Documents/PDFs"
+    },
+    {
+      "id": "documents-office",
+      "match": ["*.docx", "*.doc", "*.xlsx", "*.xls", "*.pptx"],
+      "dest": "~/Documents/Office"
+    },
+    {
+      "id": "data",
+      "match": ["*.csv", "*.json", "*.xml", "*.yaml", "*.yml"],
+      "dest": "~/Documents/Data"
+    },
+    {
+      "id": "email",
+      "match": ["*.eml", "*.msg"],
+      "dest": "~/Documents/Email"
+    },
+    {
+      "id": "media",
+      "match": ["*.mp4", "*.mov", "*.mp3", "*.m4a", "*.m3u"],
+      "dest": "~/Documents/Media"
+    }
+  ],
+  "defaults": {
+    "dest": "~/Downloads/_Unsorted"
+  }
+}
