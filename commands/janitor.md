@@ -8,9 +8,9 @@ Run the downloads janitor to organize files.
 
 ## Usage
 
-- `/janitor` -- dry-run, show proposed moves
-- `/janitor run` -- execute moves
-- `/janitor status` -- show file counts by status
+- `/janitor` — dry-run, show proposed moves
+- `/janitor run` — execute moves
+- `/janitor status` — show file counts by status
 
 ## Behavior
 
