@@ -19,10 +19,14 @@ def _validate_rules(rules: dict) -> None:
     for rule in rules.get("keyword_rules", []):
         if "id" not in rule or "pattern" not in rule or "dest" not in rule:
             raise ValueError(f"keyword rule missing required field: {rule}")
-        re.compile(rule["pattern"])  # validate regex
+        re.compile(rule["pattern"])
     for rule in rules["extension_rules"]:
         if "id" not in rule or "match" not in rule or "dest" not in rule:
             raise ValueError(f"extension rule missing required field: {rule}")
+    for rule in rules.get("content_rules", []):
+        if "id" not in rule or "pattern" not in rule or "dest" not in rule or "extensions" not in rule:
+            raise ValueError(f"content rule missing required field: {rule}")
+        re.compile(rule["pattern"])
 
 
 def match_rule(filename: str, rules: dict) -> tuple[str | None, str | None]:
@@ -39,3 +43,13 @@ def match_rule(filename: str, rules: dict) -> tuple[str | None, str | None]:
                 return rule["dest"], rule["id"]
 
     return rules["defaults"]["dest"], "default"
+
+
+def match_content_rule(ext: str, cell_values: list[str], rules: dict) -> tuple[str | None, str | None]:
+    text = " ".join(cell_values)
+    for rule in rules.get("content_rules", []):
+        if ext not in rule["extensions"]:
+            continue
+        if re.search(rule["pattern"], text):
+            return rule["dest"], rule["id"]
+    return None, None

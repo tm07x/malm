@@ -1,9 +1,11 @@
 import shutil
 from pathlib import Path
 
+from janitor.content import read_file_content
 from janitor.db import JanitorDB
+from janitor.embeddings import get_embedding, serialize_f32
 from janitor.lock import acquire_lock, release_lock
-from janitor.rules import load_rules, match_rule
+from janitor.rules import load_rules, match_content_rule, match_rule
 
 
 def run_janitor(
@@ -49,6 +51,26 @@ def _run(rules_path: str, db_path: str, dry_run: bool) -> dict:
         dest_dir, rule_id = match_rule(row["filename"], rules)
         if dest_dir is None:
             continue  # dotfile somehow got in, skip
+
+        # Content-based reclassification for supported file types
+        ext = row["extension"]
+        if ext and any(ext in r.get("extensions", []) for r in rules.get("content_rules", [])):
+            try:
+                content = read_file_content(src)
+                if content and content.get("cell_values"):
+                    db.store_content(row["id"], content)
+                    # Generate and store embedding
+                    embed_text = f"{row['filename']}\n{' '.join(content.get('sheet_names', []))}\n{' '.join(content['cell_values'][:200])}"
+                    try:
+                        vec = get_embedding(embed_text)
+                        db.store_embedding(row["id"], serialize_f32(vec))
+                    except Exception:
+                        pass  # embedding is best-effort
+                    content_dest, content_rule = match_content_rule(ext, content["cell_values"], rules)
+                    if content_dest:
+                        dest_dir, rule_id = content_dest, content_rule
+            except Exception:
+                pass  # fall back to filename-based rule
 
         dest_path = Path(dest_dir).expanduser() / row["filename"]
 
