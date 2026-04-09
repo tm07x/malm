@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% set active_page = "search" %}
+{% block title %}Search — Legal Discovery{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1.5rem;">Search</h2>
+
+<form class="search-bar" hx-get="/search" hx-target="#results" hx-push-url="true">
+    <input type="search" name="q" placeholder="Search emails..." value="{{ q or '' }}" autofocus>
+    <select name="folder">
+        <option value="">All folders</option>
+        {% for f in folders %}
+        <option value="{{ f }}" {% if folder == f %}selected{% endif %}>{{ f }}</option>
+        {% endfor %}
+    </select>
+    <input type="text" name="sender" placeholder="Sender..." value="{{ sender or '' }}" style="width: 180px;">
+    <input type="date" name="after" value="{{ after or '' }}" title="After date">
+    <input type="date" name="before" value="{{ before or '' }}" title="Before date">
+    <button type="submit">Search</button>
+</form>
+
+<div id="results">
+    {% include "partials/email_list.html" %}
+</div>
+{% endblock %}

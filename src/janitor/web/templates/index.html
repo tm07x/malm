@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% set active_page = "home" %}
+{% block title %}Dashboard — Legal Discovery{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1.5rem;">Dashboard</h2>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="label">Emails</div>
+        <div class="value">{{ "{:,}".format(stats.emails) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Attachments</div>
+        <div class="value">{{ "{:,}".format(stats.attachments) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Folders</div>
+        <div class="value">{{ stats.folders | length }}</div>
+    </div>
+</div>
+
+<h3 style="margin-bottom: 1rem; color: var(--text-muted);">Folders</h3>
+<div class="folder-list">
+    {% for fc in folder_counts %}
+    <a href="/folder/{{ fc.pst_folder }}" style="text-decoration: none; color: inherit;">
+        <div class="folder-item">
+            <span>📁 {{ fc.pst_folder }}</span>
+            <span class="folder-count">{{ "{:,}".format(fc.count) }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ folder_name }} — Legal Discovery{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/" style="color: var(--text-muted);">← Dashboard</a>
+</div>
+<h2 style="margin-bottom: 1.5rem;">📁 {{ folder_name }} <span style="color: var(--text-muted); font-size: 1rem;">({{ results | length }}{% if has_next %}+{% endif %})</span></h2>
+
+{% include "partials/email_list.html" %}
+{% endblock %}

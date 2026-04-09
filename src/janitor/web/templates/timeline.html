@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% set active_page = "timeline" %}
+{% block title %}Timeline — Legal Discovery{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1.5rem;">Timeline</h2>
+
+<form class="search-bar" style="margin-bottom: 1.5rem;">
+    <input type="date" name="after" value="{{ after or '' }}" placeholder="After">
+    <input type="date" name="before" value="{{ before or '' }}" placeholder="Before">
+    <button type="submit">Filter</button>
+</form>
+
+{% if days %}
+{% set max_count = days | map(attribute='total') | max %}
+{% for day in days %}
+<a href="/search?after={{ day.day }}&before={{ day.day }}" style="text-decoration: none; color: inherit;">
+    <div class="timeline-day">
+        <span class="timeline-date">{{ day.day }}</span>
+        <span class="timeline-count">{{ day.total }}</span>
+        <div class="timeline-bar" style="width: {{ (day.total / max_count * 100) | int }}%;"></div>
+    </div>
+</a>
+{% endfor %}
+{% else %}
+<div class="empty">No data for the selected range.</div>
+{% endif %}
+{% endblock %}

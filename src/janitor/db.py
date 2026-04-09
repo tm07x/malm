@@ -101,7 +101,12 @@ class JanitorDB:
             "UPDATE files SET sheet_names = ?, headers_json = ?, content_text = ? WHERE id = ?",
             (sheet_names, headers_json, content_text, file_id),
         )
-        # Keep FTS in sync
+        # Keep FTS in sync — delete old entry first to avoid stale tokens
+        self.conn.execute(
+            "INSERT INTO files_fts(files_fts, rowid, filename, sheet_names, headers_json, content_text) "
+            "VALUES('delete', ?, '', '', '', '')",
+            (file_id,),
+        )
         self.conn.execute(
             "INSERT INTO files_fts(rowid, filename, sheet_names, headers_json, content_text) "
             "SELECT id, filename, COALESCE(sheet_names,''), COALESCE(headers_json,''), COALESCE(content_text,'') "

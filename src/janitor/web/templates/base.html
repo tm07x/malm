@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Legal Discovery{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success: #3fb950;
+            --warning: #d29922;
+            --danger: #f85149;
+            --tag-bg: #1f2937;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+        nav {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        nav .logo {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text);
+        }
+        nav .logo span { color: var(--accent); }
+        nav a { color: var(--text-muted); font-size: 0.9rem; }
+        nav a:hover { color: var(--text); text-decoration: none; }
+        nav a.active { color: var(--accent); }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+        .stat-card .label { color: var(--text-muted); font-size: 0.85rem; }
+        .stat-card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.25rem; }
+
+        .search-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        input, select {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        input[type="search"] { flex: 1; min-width: 200px; }
+        input[type="date"] { width: 150px; }
+
+        button, .btn {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: 6px;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        button:hover, .btn:hover { background: var(--accent-hover); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 0.6rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        tr:hover { background: rgba(88, 166, 255, 0.04); }
+
+        .tag {
+            display: inline-block;
+            background: var(--tag-bg);
+            border-radius: 12px;
+            padding: 0.15rem 0.6rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .tag-folder { border: 1px solid #30363d; }
+        .tag-att { border: 1px solid var(--warning); color: var(--warning); }
+
+        .email-header {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .email-header h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+        .email-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; font-size: 0.9rem; }
+        .email-meta dt { color: var(--text-muted); font-weight: 600; }
+
+        .email-body {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.9rem;
+            line-height: 1.7;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .attachments {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .attachments h3 { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .att-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.4rem 0;
+            font-size: 0.9rem;
+        }
+        .att-size { color: var(--text-muted); font-size: 0.8rem; }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .folder-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.75rem;
+        }
+        .folder-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .folder-item:hover { border-color: var(--accent); }
+        .folder-count { color: var(--text-muted); font-size: 0.9rem; }
+
+        .timeline-day {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .timeline-date { font-weight: 600; min-width: 100px; }
+        .timeline-bar {
+            background: var(--accent);
+            height: 20px;
+            border-radius: 4px;
+            min-width: 4px;
+        }
+        .timeline-count { color: var(--text-muted); font-size: 0.85rem; min-width: 40px; }
+
+        .empty { color: var(--text-muted); text-align: center; padding: 3rem; font-size: 1rem; }
+
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline-block; }
+
+        @media (max-width: 768px) {
+            .search-bar { flex-direction: column; }
+            input[type="date"] { width: 100%; }
+            .email-meta { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo"><span>&#9878;</span> Legal Discovery</div>
+        <a href="/" {% if active_page == 'home' %}class="active"{% endif %}>Dashboard</a>
+        <a href="/search" {% if active_page == 'search' %}class="active"{% endif %}>Search</a>
+        <a href="/timeline" {% if active_page == 'timeline' %}class="active"{% endif %}>Timeline</a>
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

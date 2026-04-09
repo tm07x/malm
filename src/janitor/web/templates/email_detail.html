@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ email.subject }} — Legal Discovery{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="javascript:history.back()" style="color: var(--text-muted);">← Back</a>
+</div>
+
+<div class="email-header">
+    <h1>{{ email.subject }}</h1>
+    <dl class="email-meta">
+        <dt>From</dt><dd>{{ email.sender }}</dd>
+        <dt>To</dt><dd>{{ email.recipients }}</dd>
+        {% if email.cc %}<dt>CC</dt><dd>{{ email.cc }}</dd>{% endif %}
+        <dt>Date</dt><dd>{{ email.date }}</dd>
+        <dt>Folder</dt><dd><span class="tag tag-folder">{{ email.pst_folder }}</span></dd>
+        <dt>UUID</dt><dd><code style="font-size: 0.85rem; color: var(--accent);">{{ email.uuid }}</code></dd>
+        {% if email.thread_id %}
+        <dt>Thread</dt><dd><a href="/thread/{{ email.thread_id }}">View thread</a></dd>
+        {% endif %}
+        {% if email.message_id %}
+        <dt>Message-ID</dt><dd style="font-size: 0.8rem; color: var(--text-muted);">{{ email.message_id[:60] }}</dd>
+        {% endif %}
+    </dl>
+</div>
+
+{% if attachments %}
+<div class="attachments">
+    <h3>📎 Attachments ({{ attachments | length }})</h3>
+    {% for att in attachments %}
+    <div class="att-item">
+        <a href="/attachment/{{ att.uuid }}">{{ att.original_filename }}</a>
+        <span class="att-size">{{ att.content_type }} · {{ "{:,.0f}".format(att.size_bytes / 1024) }} KB</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="email-body">{{ body_text }}</div>
+
+<div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+    <a class="btn" href="/attachment/{{ email.uuid }}" style="background: var(--surface); color: var(--text); border: 1px solid var(--border);" download>
+        Source .eml
+    </a>
+</div>
+{% endblock %}

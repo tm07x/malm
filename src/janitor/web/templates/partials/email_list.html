@@ -1,0 +1,38 @@
+{% if results %}
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>From</th>
+            <th>Subject</th>
+            <th>Folder</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in results %}
+        <tr>
+            <td style="white-space: nowrap; color: var(--text-muted);">{{ r.date_iso[:10] if r.date_iso else '—' }}</td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.sender[:40] if r.sender else '—' }}</td>
+            <td>
+                <a href="/email/{{ r.uuid }}">{{ r.subject[:80] if r.subject else '(no subject)' }}</a>
+                {% if r.has_attachments %}<span class="tag tag-att">📎</span>{% endif %}
+            </td>
+            <td><span class="tag tag-folder">{{ r.pst_folder }}</span></td>
+            <td style="font-size: 0.75rem; color: var(--text-muted);">{{ r.uuid[:8] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if has_next %}
+<div class="pagination">
+    <a class="btn" href="/search?q={{ q or '' }}&folder={{ folder or '' }}&sender={{ sender or '' }}&after={{ after or '' }}&before={{ before or '' }}&page={{ page + 1 }}">
+        Load more
+    </a>
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty">No emails found. Try a different search.</div>
+{% endif %}

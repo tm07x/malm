@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Thread — Legal Discovery{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="javascript:history.back()" style="color: var(--text-muted);">← Back</a>
+</div>
+<h2 style="margin-bottom: 1.5rem;">Thread <code style="font-size: 0.8rem; color: var(--text-muted);">{{ thread_id[:40] }}...</code> <span style="color: var(--text-muted); font-size: 1rem;">({{ emails | length }} emails)</span></h2>
+
+{% if emails %}
+{% for e in emails %}
+<div class="email-header" style="margin-bottom: 0.75rem; {% if not loop.first %}border-left: 3px solid var(--accent); margin-left: {{ (loop.index0 * 8) | min(40) }}px;{% endif %}">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <a href="/email/{{ e.uuid }}" style="font-weight: 600; font-size: 1.05rem;">{{ e.subject }}</a>
+            <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+                {{ e.sender }} → {{ e.recipients }}
+            </div>
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">
+            {{ e.date_iso[:10] if e.date_iso else '—' }}
+        </div>
+    </div>
+    {% if e.body_preview %}
+    <div style="margin-top: 0.75rem; color: var(--text-muted); font-size: 0.85rem; max-height: 80px; overflow: hidden;">
+        {{ e.body_preview[:200] }}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="empty">No emails found in this thread.</div>
+{% endif %}
+{% endblock %}
