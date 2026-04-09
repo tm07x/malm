@@ -9,7 +9,7 @@
 
 {% if emails %}
 {% for e in emails %}
-<div class="email-header" style="margin-bottom: 0.75rem; {% if not loop.first %}border-left: 3px solid var(--accent); margin-left: {{ (loop.index0 * 8) | min(40) }}px;{% endif %}">
+<div class="email-header" style="margin-bottom: 0.75rem; {% if not loop.first %}border-left: 3px solid var(--accent); margin-left: {{ [loop.index0 * 8, 40] | min }}px;{% endif %}">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
             <a href="/email/{{ e.uuid }}" style="font-weight: 600; font-size: 1.05rem;">{{ e.subject }}</a>
