@@ -128,6 +128,7 @@ def test_export_from_search(test_db):
     out_dir = str(tmp_path / "search_exports")
     result = export_from_search(
         "Contract", package_name="search-contract",
-        db_path=db_path,
+        output_dir=out_dir, db_path=db_path,
     )
     assert result.endswith("search-contract.zip")
+    assert os.path.isfile(result)

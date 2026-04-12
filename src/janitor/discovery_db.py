@@ -74,14 +74,10 @@ class DiscoveryDB:
                 self.conn.execute(f"ALTER TABLE emails ADD COLUMN {col} {typ}")
         self.conn.commit()
 
-        if "thread_id" in new_cols and "thread_id" not in cols:
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_thread ON emails(thread_id)")
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)")
-            self.conn.commit()
-        else:
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_thread ON emails(thread_id)")
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)")
-            self.conn.commit()
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_thread ON emails(thread_id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_date_folder ON emails(date_iso, pst_folder)")
+        self.conn.commit()
 
         fts_exists = self.conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='emails_fts'"
@@ -188,13 +184,26 @@ class DiscoveryDB:
         params.append(limit)
         return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
 
+    @staticmethod
+    def _escape_fts_query(query: str) -> str:
+        import re
+        cleaned = re.sub(r'[^\w\s]', '', query, flags=re.UNICODE)
+        tokens = cleaned.split()
+        if not tokens:
+            return '""'
+        return " ".join(t + "*" for t in tokens)
+
     def search_fts(self, query: str, limit: int = 50) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT e.*, snippet(emails_fts, 3, '>>>', '<<<', '...', 64) AS snippet "
-            "FROM emails_fts fts JOIN emails e ON fts.rowid = e.rowid "
-            "WHERE emails_fts MATCH ? ORDER BY rank LIMIT ?",
-            (query, limit),
-        ).fetchall()
+        escaped = self._escape_fts_query(query)
+        try:
+            rows = self.conn.execute(
+                "SELECT e.*, snippet(emails_fts, 3, '>>>', '<<<', '...', 64) AS snippet "
+                "FROM emails_fts fts JOIN emails e ON fts.rowid = e.rowid "
+                "WHERE emails_fts MATCH ? ORDER BY rank LIMIT ?",
+                (escaped, limit),
+            ).fetchall()
+        except Exception:
+            return []
         return [dict(r) for r in rows]
 
     def get_thread(self, thread_id: str) -> list[dict]:
@@ -212,6 +221,10 @@ class DiscoveryDB:
         return [dict(r) for r in self.conn.execute(
             "SELECT * FROM attachments WHERE email_uuid = ?", (email_uuid,)
         ).fetchall()]
+
+    def get_attachments_by_uuid(self, uuid: str) -> dict | None:
+        row = self.conn.execute("SELECT * FROM attachments WHERE uuid = ?", (uuid,)).fetchone()
+        return dict(row) if row else None
 
     def get_stats(self) -> dict:
         email_count = self.conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]

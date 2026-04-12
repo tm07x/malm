@@ -12,7 +12,10 @@ from pathlib import Path
 
 from janitor.discovery_db import DiscoveryDB
 
-PST_FILE = "/Users/tm07x/Documents/Tvistesak - Mai /Dump/Backups/lasse@reinconsult.no.pst"
+PST_FILE = os.environ.get(
+    "DISCOVERY_PST_PATH",
+    str(Path.home() / "Documents" / "Tvistesak - Mai " / "Dump" / "Backups" / "lasse@reinconsult.no.pst"),
+)
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
 SOURCE_DIR = DISCOVERY_ROOT / "source-doc"
 MD_DIR = DISCOVERY_ROOT / "MD"
@@ -68,16 +71,12 @@ def _decode_mime_header(value: str | None) -> str:
 
 
 def _decode_payload(payload: bytes, charset: str) -> str:
-    try:
-        return payload.decode(charset, errors="replace")
-    except (LookupError, UnicodeDecodeError):
-        # Try common Outlook encodings before falling back to utf-8
-        for enc in ("windows-1252", "iso-8859-1", "utf-8"):
-            try:
-                return payload.decode(enc, errors="replace")
-            except (LookupError, UnicodeDecodeError):
-                continue
-        return payload.decode("utf-8", errors="replace")
+    for enc in (charset, "windows-1252", "iso-8859-1", "utf-8"):
+        try:
+            return payload.decode(enc, errors="replace")
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return payload.decode("utf-8", errors="replace")
 
 
 def _parse_eml(eml_path: Path) -> dict:
@@ -217,6 +216,7 @@ def extract_pst(
     email_count = 0
     att_count = 0
     error_count = 0
+    run_status = "error"
 
     try:
         cache_dir = _ensure_eml_cache(pst_path)

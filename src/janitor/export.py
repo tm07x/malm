@@ -61,7 +61,7 @@ def export_csv(email_uuids: list[str], output_path: str, db_path: str = DEFAULT_
 
 
 def export_evidence_package(email_uuids: list[str], package_name: str,
-                            output_dir: str = None, db_path: str = DEFAULT_DB) -> str:
+                            output_dir: str | None = None, db_path: str = DEFAULT_DB) -> str:
     db = DiscoveryDB(db_path)
     try:
         if output_dir is None:
@@ -122,9 +122,10 @@ def export_evidence_package(email_uuids: list[str], package_name: str,
         db.close()
 
 
-def export_from_search(query: str, folder: str = None, sender: str = None,
-                       after: str = None, before: str = None,
-                       package_name: str = None, db_path: str = DEFAULT_DB) -> str:
+def export_from_search(query: str, folder: str | None = None, sender: str | None = None,
+                       after: str | None = None, before: str | None = None,
+                       package_name: str | None = None, output_dir: str | None = None,
+                       db_path: str = DEFAULT_DB) -> str:
     db = DiscoveryDB(db_path)
     try:
         results = db.search(query, folder=folder, sender=sender, after=after, before=before)
@@ -135,4 +136,4 @@ def export_from_search(query: str, folder: str = None, sender: str = None,
     if not package_name:
         package_name = f"search-{query[:30].replace(' ', '_')}"
 
-    return export_evidence_package(uuids, package_name, db_path=db_path)
+    return export_evidence_package(uuids, package_name, output_dir=output_dir, db_path=db_path)
