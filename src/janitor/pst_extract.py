@@ -54,9 +54,15 @@ def _sanitize(name: str, max_len: int = 80) -> str:
     return clean[:max_len] if clean else "untitled"
 
 
+def _unfold_header(value: str) -> str:
+    """Remove RFC 2822 header folding (newline + whitespace)."""
+    return re.sub(r'\r?\n[\t ]+', ' ', value).strip()
+
+
 def _decode_mime_header(value: str | None) -> str:
     if not value:
         return ""
+    value = _unfold_header(value)
     parts = []
     for chunk, charset in _decode_header(value):
         if isinstance(chunk, bytes):
