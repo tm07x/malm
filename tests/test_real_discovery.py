@@ -37,27 +37,18 @@ class TestDataIntegrity:
         assert count > 10_000, f"Expected 14k+ emails, got {count}"
 
     def test_every_email_has_source_file(self, db):
-        missing = []
         rows = db.conn.execute("SELECT uuid, source_path FROM emails LIMIT 200").fetchall()
-        for row in rows:
-            if not Path(row["source_path"]).exists():
-                missing.append(row["uuid"])
+        missing = [row["uuid"] for row in rows if not Path(row["source_path"]).exists()]
         assert len(missing) == 0, f"{len(missing)} emails missing source files: {missing[:5]}"
 
     def test_every_email_has_markdown_file(self, db):
-        missing = []
         rows = db.conn.execute("SELECT uuid, markdown_path FROM emails LIMIT 200").fetchall()
-        for row in rows:
-            if not Path(row["markdown_path"]).exists():
-                missing.append(row["uuid"])
+        missing = [row["uuid"] for row in rows if not Path(row["markdown_path"]).exists()]
         assert len(missing) == 0, f"{len(missing)} emails missing markdown: {missing[:5]}"
 
     def test_attachment_files_exist(self, db):
-        missing = []
         rows = db.conn.execute("SELECT uuid, source_path FROM attachments LIMIT 200").fetchall()
-        for row in rows:
-            if not Path(row["source_path"]).exists():
-                missing.append(row["uuid"])
+        missing = [row["uuid"] for row in rows if not Path(row["source_path"]).exists()]
         assert len(missing) == 0, f"{len(missing)} attachments missing files: {missing[:5]}"
 
     def test_no_orphan_attachments(self, db):
@@ -253,11 +244,27 @@ class TestExport:
 class TestWebUI:
     @pytest.fixture(autouse=True, scope="class")
     def server(self):
+        import httpx
         proc = subprocess.Popen(
             ["uv", "run", "uvicorn", "janitor.web.app:app", "--host", "127.0.0.1", "--port", "8877"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        time.sleep(3)
+        # Poll for server readiness
+        timeout = 30  # seconds
+        start = time.time()
+        while time.time() - start < timeout:
+            if proc.poll() is not None:
+                raise RuntimeError(f"Server process exited early with code {proc.returncode}")
+            try:
+                resp = httpx.get("http://127.0.0.1:8877/", timeout=2)
+                if resp.status_code == 200:
+                    break
+            except (httpx.ConnectError, httpx.TimeoutException):
+                time.sleep(0.5)
+        else:
+            proc.terminate()
+            proc.wait(timeout=5)
+            raise RuntimeError(f"Server failed to start within {timeout}s")
         yield proc
         proc.terminate()
         proc.wait(timeout=5)
@@ -272,8 +279,14 @@ class TestWebUI:
         assert "Legal Discovery" in r.text
 
     def test_dashboard_shows_counts(self, server):
+        from janitor.discovery_db import DiscoveryDB
+        db = DiscoveryDB(str(DB_PATH))
+        expected_count = db.email_count()
+        db.close()
         r = self._get("/")
-        assert "14,474" in r.text or "14474" in r.text
+        # Format with comma separator (e.g., "14,474") as used in the UI
+        formatted_count = f"{expected_count:,}"
+        assert formatted_count in r.text, f"Expected count {formatted_count} not found in dashboard"
 
     def test_search_returns_results(self, server):
         r = self._get("/search?q=faktura")
