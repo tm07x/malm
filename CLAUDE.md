@@ -67,14 +67,21 @@ print(export_from_search('konkurs', package_name='konkurs_evidence'))
 - `content.py` — reads file content for classification. Supports xlsx, pdf, docx, csv, xml, json, txt.
 - `embeddings.py` — Voyage AI (`voyage-3-large`, 1024d). Requires `VOYAGE_API_KEY`.
 
-### Legal Discovery (PST Search)
+### Legal Discovery (Unified Document Pipeline)
 
-**Pipeline:** PST → readpst (cached) → parse .eml → UUID-named files + markdown + SQLite
+**Pipeline:** Sources → ingest → extract content → index in unified.db → search/export
+
+**Sources:**
+- PST emails: `pst_extract.py` → readpst (cached) → parse .eml → UUID-named files + markdown
+- Filesystem: rule-matched files from janitor
+- Filedrop: uploaded files via web UI
 
 **Core modules** (`src/janitor/`):
+- `models.py` — `Document` dataclass: unified schema for emails, files, and attachments.
+- `store.py` — `DocumentStore`: SQLite with FTS5 + optional sqlite-vec (1024d embeddings). Unified `documents` table replaces separate `emails`/`attachments` tables.
+- `discovery_db.py` — Legacy SQLite store (emails + attachments tables). Use `scripts/migrate-to-unified.py` to migrate to unified.db.
 - `pst_extract.py` — Extracts emails from PST files via `readpst`. Per-PST hash-based caching. Extracts threading headers (Message-ID, In-Reply-To, References). Handles Windows-1252/ISO-8859-1 encoding.
-- `discovery_db.py` — SQLite with FTS5 over full body text, subject, sender, recipients. Thread grouping via `thread_id`. Auto-migrates schema.
-- `export.py` — Evidence package export: CSV, ZIP with manifest.csv, manifest.json, source .eml files, markdown, and attachments.
+- `export.py` — Evidence package export: CSV, ZIP with manifest. Supports both DiscoveryDB and DocumentStore via `export_from_store()`.
 
 **Web UI** (`src/janitor/web/`):
 - `app.py` — FastAPI + Jinja2 + htmx. Routes: dashboard, search, email detail, folder browser, timeline, thread view, attachment serving, evidence export.
@@ -83,13 +90,17 @@ print(export_from_search('konkurs', package_name='konkurs_evidence'))
 **Output** (`~/Documents/Legal-Discovery/`, not in repo):
 - `source-doc/` — UUID-prefixed .eml files and attachments
 - `MD/` — UUID-prefixed parsed markdown
-- `discovery.db` — SQLite index with FTS5
+- `discovery.db` — Legacy SQLite index (emails + attachments)
+- `unified.db` — Unified SQLite index (documents table, FTS5, optional vec)
 - `.eml-cache/` — Per-PST readpst cache (hash-isolated)
 - `exports/` — Evidence package ZIPs
 
+**Migration:** `uv run python scripts/migrate-to-unified.py` reads discovery.db and populates unified.db. Idempotent (INSERT OR REPLACE).
+
 **Claude Code plugin** (`.claude-plugin/`):
 - `agents/janitor.md` — downloads organizer agent
-- `agents/pst-search.md` — PST search/extraction agent
+- `agents/pst-search.md` — PST search/extraction agent (legacy, uses discovery.db)
+- `agents/search.md` — unified search agent (uses unified.db)
 - `commands/janitor.md` — `/janitor` slash command
 
 ## Key Details
