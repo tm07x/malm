@@ -2,9 +2,10 @@
 <table>
     <thead>
         <tr>
+            <th>Type</th>
             <th>Date</th>
             <th>From</th>
-            <th>Subject</th>
+            <th>Title</th>
             <th>Folder</th>
             <th></th>
         </tr>
@@ -12,13 +13,13 @@
     <tbody>
         {% for r in results %}
         <tr>
-            <td style="white-space: nowrap; color: var(--text-muted);">{{ r.date_iso[:10] if r.date_iso else '—' }}</td>
+            <td><span class="tag">{{ r.doc_type or 'email' }}</span></td>
+            <td style="white-space: nowrap; color: var(--text-muted);">{{ r.date_sent[:10] if r.date_sent else '—' }}</td>
             <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.sender[:40] if r.sender else '—' }}</td>
             <td>
-                <a href="/email/{{ r.uuid }}">{{ r.subject[:80] if r.subject else '(no subject)' }}</a>
-                {% if r.has_attachments %}<span class="tag tag-att">📎</span>{% endif %}
+                <a href="/doc/{{ r.uuid }}">{{ r.title[:80] if r.title else r.filename[:80] if r.filename else '(untitled)' }}</a>
             </td>
-            <td><span class="tag tag-folder">{{ r.pst_folder }}</span></td>
+            <td>{% if r.folder %}<span class="tag tag-folder">{{ r.folder }}</span>{% endif %}</td>
             <td style="font-size: 0.75rem; color: var(--text-muted);">{{ r.uuid[:8] }}</td>
         </tr>
         {% endfor %}
@@ -27,12 +28,12 @@
 
 {% if has_next %}
 <div class="pagination">
-    <a class="btn" href="/search?q={{ q or '' }}&folder={{ folder or '' }}&sender={{ sender or '' }}&after={{ after or '' }}&before={{ before or '' }}&page={{ page + 1 }}">
+    <a class="btn" href="/search?q={{ q or '' }}&doc_type={{ doc_type or '' }}&folder={{ folder or '' }}&sender={{ sender or '' }}&after={{ after or '' }}&before={{ before or '' }}&page={{ page + 1 }}">
         Load more
     </a>
 </div>
 {% endif %}
 
 {% else %}
-<div class="empty">No emails found. Try a different search.</div>
+<div class="empty">No documents found. Try a different search.</div>
 {% endif %}

@@ -4,14 +4,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from janitor.discovery_db import DiscoveryDB
+from janitor.store import DocumentStore
+from janitor.models import Document
 from janitor.web.app import app, get_db
 
 
 @pytest.fixture
 def test_db(tmp_path):
     db_path = str(tmp_path / "test.db")
-    db = DiscoveryDB(db_path)
+    store = DocumentStore(db_path)
 
     md1 = tmp_path / "email1.md"
     md1.write_text("# Test\n\n## Body\n\nHello from the body", encoding="utf-8")
@@ -22,58 +23,57 @@ def test_db(tmp_path):
     att_file = tmp_path / "report.pdf"
     att_file.write_bytes(b"%PDF-fake")
 
-    db.insert_email(
+    store.insert(Document(
         uuid="e001",
-        pst_folder="Innboks",
-        subject="Konkursbegjæring mottatt",
+        doc_type="email",
+        source="pst",
+        created_at="2024-06-01T00:00:00Z",
+        title="Konkursbegjæring mottatt",
         sender="alice@example.com",
         recipients="bob@example.com",
         cc="",
-        date="Mon, 01 Jan 2024 10:00:00 +0100",
-        date_iso="2024-01-01T10:00:00+01:00",
-        has_attachments=1,
-        attachment_names="report.pdf",
+        date_sent="2024-01-01T10:00:00+01:00",
+        folder="Innboks",
         source_path=str(source1),
         markdown_path=str(md1),
-        original_filename="1.eml",
+        filename="1.eml",
         body_preview="Kort forhåndsvisning",
-        extracted_at="2024-06-01T00:00:00Z",
         body_text="Full body text for FTS search testing",
         message_id="<msg001@example.com>",
         thread_id="thread-001",
-    )
-    db.insert_email(
+    ))
+    store.insert(Document(
         uuid="e002",
-        pst_folder="Sendte",
-        subject="RE: Konkursbegjæring mottatt",
+        doc_type="email",
+        source="pst",
+        created_at="2024-06-01T00:00:00Z",
+        title="RE: Konkursbegjæring mottatt",
         sender="bob@example.com",
         recipients="alice@example.com",
         cc="",
-        date="Tue, 02 Jan 2024 14:00:00 +0100",
-        date_iso="2024-01-02T14:00:00+01:00",
-        has_attachments=0,
-        attachment_names=None,
+        date_sent="2024-01-02T14:00:00+01:00",
+        folder="Sendte",
         source_path=str(tmp_path / "email2.eml"),
         markdown_path=str(tmp_path / "email2.md"),
-        original_filename="2.eml",
+        filename="2.eml",
         body_preview="Svar på konkursbegjæring",
-        extracted_at="2024-06-01T00:00:00Z",
         body_text="Reply body text",
         message_id="<msg002@example.com>",
         in_reply_to="<msg001@example.com>",
         thread_id="thread-001",
-    )
-    db.insert_attachment(
+    ))
+    store.insert(Document(
         uuid="a001",
-        email_uuid="e001",
-        original_filename="report.pdf",
+        doc_type="attachment",
+        source="pst",
+        created_at="2024-06-01T00:00:00Z",
+        parent_uuid="e001",
+        filename="report.pdf",
         source_path=str(att_file),
-        markdown_path=None,
         size_bytes=9,
         content_type="application/pdf",
-        extracted_at="2024-06-01T00:00:00Z",
-    )
-    db.close()
+    ))
+    store.close()
     return db_path, tmp_path
 
 
@@ -82,7 +82,7 @@ def client(test_db):
     db_path, tmp_path = test_db
 
     def override_get_db():
-        db = DiscoveryDB(db_path)
+        db = DocumentStore(db_path)
         try:
             yield db
         finally:
@@ -98,9 +98,9 @@ class TestDashboard:
         resp = client.get("/")
         assert resp.status_code == 200
 
-    def test_index_shows_email_count(self, client):
+    def test_index_shows_doc_count(self, client):
         resp = client.get("/")
-        assert "2" in resp.text
+        assert "3" in resp.text
 
     def test_index_shows_folders(self, client):
         resp = client.get("/")
@@ -128,48 +128,61 @@ class TestSearch:
         resp = client.get("/search?q=konkurs", headers={"HX-Request": "true"})
         assert resp.status_code == 200
         assert "e001" in resp.text
-        # Partial should not include full page chrome
         assert "<!DOCTYPE" not in resp.text
 
     def test_search_no_results(self, client):
         resp = client.get("/search?q=nonexistentxyz")
         assert resp.status_code == 200
-        assert "No emails found" in resp.text
+        assert "No documents found" in resp.text
+
+    def test_search_by_doc_type(self, client):
+        resp = client.get("/search?doc_type=email")
+        assert resp.status_code == 200
+        assert "e001" in resp.text
+
+    def test_search_by_doc_type_attachment(self, client):
+        resp = client.get("/search?doc_type=attachment")
+        assert resp.status_code == 200
+        assert "a001" in resp.text
 
 
-class TestEmailDetail:
-    def test_email_detail_200(self, client):
+class TestDocDetail:
+    def test_doc_detail_200(self, client):
+        resp = client.get("/doc/e001")
+        assert resp.status_code == 200
+        assert "Konkursbegjæring" in resp.text
+
+    def test_email_alias_200(self, client):
         resp = client.get("/email/e001")
         assert resp.status_code == 200
         assert "Konkursbegjæring" in resp.text
 
-    def test_email_detail_shows_metadata(self, client):
-        resp = client.get("/email/e001")
+    def test_doc_detail_shows_metadata(self, client):
+        resp = client.get("/doc/e001")
         assert "alice@example.com" in resp.text
         assert "bob@example.com" in resp.text
         assert "Innboks" in resp.text
 
-    def test_email_detail_shows_body(self, client):
-        resp = client.get("/email/e001")
+    def test_doc_detail_shows_body(self, client):
+        resp = client.get("/doc/e001")
         assert "Hello from the body" in resp.text
 
-    def test_email_detail_shows_attachments(self, client):
-        resp = client.get("/email/e001")
+    def test_doc_detail_shows_attachments(self, client):
+        resp = client.get("/doc/e001")
         assert "report.pdf" in resp.text
 
-    def test_email_detail_shows_thread_link(self, client):
-        resp = client.get("/email/e001")
+    def test_doc_detail_shows_thread_link(self, client):
+        resp = client.get("/doc/e001")
         assert "/thread/thread-001" in resp.text
 
-    def test_email_detail_not_found(self, client):
-        resp = client.get("/email/nonexistent")
+    def test_doc_detail_not_found(self, client):
+        resp = client.get("/doc/nonexistent")
         assert resp.status_code == 404
 
 
 class TestAttachment:
     def test_serve_attachment(self, client, test_db):
         _, tmp_path = test_db
-        # The path check requires DISCOVERY_ROOT — override it for test
         import janitor.web.app as web_app
         original_root = web_app.DISCOVERY_ROOT
         web_app.DISCOVERY_ROOT = tmp_path
@@ -214,7 +227,7 @@ class TestThread:
     def test_thread_view(self, client):
         resp = client.get("/thread/thread-001")
         assert resp.status_code == 200
-        assert "2 emails" in resp.text
+        assert "2 documents" in resp.text
 
     def test_thread_shows_both_emails(self, client):
         resp = client.get("/thread/thread-001")
@@ -224,7 +237,7 @@ class TestThread:
     def test_empty_thread(self, client):
         resp = client.get("/thread/nonexistent-thread")
         assert resp.status_code == 200
-        assert "No emails found" in resp.text
+        assert "No documents found" in resp.text
 
 
 class TestAPIStats:
@@ -232,9 +245,10 @@ class TestAPIStats:
         resp = client.get("/api/stats")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["emails"] == 2
-        assert data["attachments"] == 1
-        assert "folder_counts" in data
+        assert data["total"] == 3
+        assert "by_type" in data
+        assert data["by_type"]["email"] == 2
+        assert data["by_type"]["attachment"] == 1
 
 
 class TestExportEndpoint:

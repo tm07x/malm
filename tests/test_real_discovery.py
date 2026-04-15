@@ -328,7 +328,9 @@ class TestWebUI:
         r = self._get("/api/stats")
         assert r.status_code == 200
         data = r.json()
-        assert data["emails"] > 10_000
+        assert "total" in data
+        assert "by_type" in data
+        assert data["total"] > 10_000
         assert len(data["folders"]) > 10
 
     def test_attachment_serves(self, server):

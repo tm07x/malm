@@ -6,7 +6,13 @@
 <h2 style="margin-bottom: 1.5rem;">Search</h2>
 
 <form class="search-bar" hx-get="/search" hx-target="#results" hx-push-url="true">
-    <input type="search" name="q" placeholder="Search emails..." value="{{ q or '' }}" autofocus>
+    <input type="search" name="q" placeholder="Search documents..." value="{{ q or '' }}" autofocus>
+    <select name="doc_type">
+        <option value="">All types</option>
+        <option value="email" {% if doc_type == 'email' %}selected{% endif %}>Emails</option>
+        <option value="file" {% if doc_type == 'file' %}selected{% endif %}>Files</option>
+        <option value="attachment" {% if doc_type == 'attachment' %}selected{% endif %}>Attachments</option>
+    </select>
     <select name="folder">
         <option value="">All folders</option>
         {% for f in folders %}

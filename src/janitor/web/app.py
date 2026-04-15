@@ -1,4 +1,5 @@
 import mimetypes
+import os
 from collections.abc import Generator
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from janitor.discovery_db import DiscoveryDB
+from janitor.store import DocumentStore
 
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
 DB_PATH = DISCOVERY_ROOT / "discovery.db"
@@ -16,8 +17,18 @@ app = FastAPI(title="Legal Discovery")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-def get_db() -> Generator[DiscoveryDB]:
-    db = DiscoveryDB(str(DB_PATH))
+def _resolve_db_path() -> str:
+    override = os.environ.get("JANITOR_DB_PATH")
+    if override:
+        return override
+    unified = DISCOVERY_ROOT / "unified.db"
+    if unified.exists():
+        return str(unified)
+    return str(DB_PATH)
+
+
+def get_db() -> Generator[DocumentStore]:
+    db = DocumentStore(_resolve_db_path())
     try:
         yield db
     finally:
@@ -29,32 +40,33 @@ def _render(request: Request, template: str, **ctx):
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, db: DiscoveryDB = Depends(get_db)):
-    stats = db.get_stats()
-    folder_counts = db.folder_counts()
-    return _render(request, "index.html", stats=stats, folder_counts=folder_counts)
+def index(request: Request, db: DocumentStore = Depends(get_db)):
+    stats = db.stats()
+    return _render(request, "index.html", stats=stats)
 
 
 @app.get("/search", response_class=HTMLResponse)
 def search(
     request: Request,
     q: str = "",
+    doc_type: str | None = None,
     folder: str | None = None,
     sender: str | None = None,
     after: str | None = None,
     before: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    db: DiscoveryDB = Depends(get_db),
+    db: DocumentStore = Depends(get_db),
 ):
-    results = db.search(q, folder, sender, after, before, limit=per_page + 1)
+    results = db.search(q, doc_type=doc_type, folder=folder, sender=sender,
+                        after=after, before=before, limit=per_page + 1)
     has_next = len(results) > per_page
     results = results[:per_page]
     folders = [r[0] for r in db.conn.execute(
-        "SELECT DISTINCT pst_folder FROM emails ORDER BY pst_folder"
+        "SELECT DISTINCT folder FROM documents WHERE folder IS NOT NULL ORDER BY folder"
     ).fetchall()]
 
-    ctx = dict(results=results, q=q, folder=folder, sender=sender,
+    ctx = dict(results=results, q=q, doc_type=doc_type, folder=folder, sender=sender,
                after=after, before=before, page=page, has_next=has_next)
 
     if request.headers.get("HX-Request"):
@@ -63,43 +75,52 @@ def search(
     return _render(request, "search.html", folders=folders, **ctx)
 
 
-@app.get("/email/{uuid}", response_class=HTMLResponse)
-def email_detail(request: Request, uuid: str, db: DiscoveryDB = Depends(get_db)):
-    email_rec = db.get_email(uuid)
-    attachments = db.get_attachments(uuid) if email_rec else []
-
-    if not email_rec:
+@app.get("/doc/{uuid}", response_class=HTMLResponse)
+def doc_detail(request: Request, uuid: str, db: DocumentStore = Depends(get_db)):
+    doc = db.get(uuid)
+    if not doc:
         return HTMLResponse("<h1>Not found</h1>", status_code=404)
 
-    md_path = Path(email_rec["markdown_path"])
-    body_md = md_path.read_text(encoding="utf-8") if md_path.exists() else ""
+    attachments = db.get_children(uuid) if doc["doc_type"] == "email" else []
 
     body_text = ""
-    if "## Body" in body_md:
-        body_text = body_md.split("## Body")[-1].strip()
+    md_path = doc.get("markdown_path")
+    if md_path:
+        p = Path(md_path)
+        if p.exists():
+            body_md = p.read_text(encoding="utf-8")
+            if "## Body" in body_md:
+                body_text = body_md.split("## Body")[-1].strip()
+            else:
+                body_text = body_md
 
     return _render(request, "email_detail.html",
-                   email=email_rec, attachments=attachments, body_text=body_text)
+                   email=doc, attachments=attachments, body_text=body_text)
+
+
+@app.get("/email/{uuid}", response_class=HTMLResponse)
+def email_detail(request: Request, uuid: str, db: DocumentStore = Depends(get_db)):
+    return doc_detail(request, uuid, db)
 
 
 @app.get("/attachment/{uuid}")
-def serve_attachment(uuid: str, db: DiscoveryDB = Depends(get_db)):
-    atts = db.get_attachments_by_uuid(uuid)
-    if not atts:
+def serve_attachment(uuid: str, db: DocumentStore = Depends(get_db)):
+    doc = db.get(uuid)
+    if not doc:
         return HTMLResponse("Not found", status_code=404)
-    att = atts
-    path = Path(att["source_path"]).resolve()
+    path = Path(doc["source_path"]).resolve()
     if not path.is_relative_to(DISCOVERY_ROOT):
         return HTMLResponse("Forbidden", status_code=403)
     if not path.exists():
         return HTMLResponse("File not found on disk", status_code=404)
-    ct = att["content_type"] or mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    return FileResponse(str(path), media_type=ct, filename=att["original_filename"])
+    ct = doc.get("content_type") or mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    fname = doc.get("filename") or path.name
+    return FileResponse(str(path), media_type=ct, filename=fname)
 
 
 @app.get("/folder/{folder_name:path}", response_class=HTMLResponse)
 def folder_view(request: Request, folder_name: str, page: int = 1, per_page: int = 50,
-                db: DiscoveryDB = Depends(get_db)):
+                db: DocumentStore = Depends(get_db)):
     results = db.search("", folder=folder_name, limit=per_page + 1)
     has_next = len(results) > per_page
     results = results[:per_page]
@@ -109,20 +130,20 @@ def folder_view(request: Request, folder_name: str, page: int = 1, per_page: int
 
 @app.get("/timeline", response_class=HTMLResponse)
 def timeline(request: Request, after: str | None = None, before: str | None = None,
-             db: DiscoveryDB = Depends(get_db)):
+             db: DocumentStore = Depends(get_db)):
     sql = """
-        SELECT date(date_iso) as day, COUNT(*) as count, pst_folder
-        FROM emails
-        WHERE date_iso IS NOT NULL AND date_iso != ''
+        SELECT date(date_sent) as day, COUNT(*) as count, folder
+        FROM documents
+        WHERE date_sent IS NOT NULL AND date_sent != ''
     """
     params = []
     if after:
-        sql += " AND date_iso >= ?"
+        sql += " AND date_sent >= ?"
         params.append(after)
     if before:
-        sql += " AND date_iso <= ?"
+        sql += " AND date_sent <= ?"
         params.append(before)
-    sql += " GROUP BY day, pst_folder ORDER BY day DESC LIMIT 500"
+    sql += " GROUP BY day, folder ORDER BY day DESC LIMIT 500"
 
     rows = [dict(r) for r in db.conn.execute(sql, params).fetchall()]
 
@@ -132,16 +153,16 @@ def timeline(request: Request, after: str | None = None, before: str | None = No
         if day not in days:
             days[day] = {"day": day, "total": 0, "folders": {}}
         days[day]["total"] += row["count"]
-        days[day]["folders"][row["pst_folder"]] = row["count"]
+        days[day]["folders"][row["folder"] or "unknown"] = row["count"]
 
     return _render(request, "timeline.html",
                    days=list(days.values()), after=after, before=before)
 
 
 @app.get("/thread/{thread_id:path}", response_class=HTMLResponse)
-def thread_view(request: Request, thread_id: str, db: DiscoveryDB = Depends(get_db)):
-    emails = db.get_thread(thread_id)
-    return _render(request, "thread.html", thread_id=thread_id, emails=emails)
+def thread_view(request: Request, thread_id: str, db: DocumentStore = Depends(get_db)):
+    docs = db.get_thread(thread_id)
+    return _render(request, "thread.html", thread_id=thread_id, emails=docs)
 
 
 @app.post("/api/export", response_class=HTMLResponse)
@@ -150,10 +171,10 @@ def api_export(request: Request, uuids: str = ""):
 
     uuid_list = [u.strip() for u in uuids.split(",") if u.strip()]
     if not uuid_list:
-        return HTMLResponse("No emails selected", status_code=400)
+        return HTMLResponse("No documents selected", status_code=400)
 
-    zip_path = export_evidence_package(uuid_list, f"export_{len(uuid_list)}_emails")
-    return HTMLResponse(f'<a href="/exports/{Path(zip_path).name}" download>Download export ({len(uuid_list)} emails)</a>')
+    zip_path = export_evidence_package(uuid_list, f"export_{len(uuid_list)}_docs")
+    return HTMLResponse(f'<a href="/exports/{Path(zip_path).name}" download>Download export ({len(uuid_list)} documents)</a>')
 
 
 @app.get("/exports/{filename}")
@@ -168,8 +189,5 @@ def download_export(filename: str):
 
 
 @app.get("/api/stats")
-def api_stats(db: DiscoveryDB = Depends(get_db)):
-    stats = db.get_stats()
-    folder_counts = db.folder_counts()
-    stats["folder_counts"] = folder_counts
-    return stats
+def api_stats(db: DocumentStore = Depends(get_db)):
+    return db.stats()

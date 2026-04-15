@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ email.subject }} — Legal Discovery{% endblock %}
+{% block title %}{{ email.title or email.filename or 'Document' }} — Legal Discovery{% endblock %}
 
 {% block content %}
 <div style="margin-bottom: 1rem;">
@@ -7,13 +7,14 @@
 </div>
 
 <div class="email-header">
-    <h1>{{ email.subject }}</h1>
+    <h1>{{ email.title or email.filename or '(untitled)' }}</h1>
     <dl class="email-meta">
-        <dt>From</dt><dd>{{ email.sender }}</dd>
-        <dt>To</dt><dd>{{ email.recipients }}</dd>
+        <dt>Type</dt><dd><span class="tag">{{ email.doc_type }}</span></dd>
+        {% if email.sender %}<dt>From</dt><dd>{{ email.sender }}</dd>{% endif %}
+        {% if email.recipients %}<dt>To</dt><dd>{{ email.recipients }}</dd>{% endif %}
         {% if email.cc %}<dt>CC</dt><dd>{{ email.cc }}</dd>{% endif %}
-        <dt>Date</dt><dd>{{ email.date }}</dd>
-        <dt>Folder</dt><dd><span class="tag tag-folder">{{ email.pst_folder }}</span></dd>
+        {% if email.date_sent %}<dt>Date</dt><dd>{{ email.date_sent }}</dd>{% endif %}
+        {% if email.folder %}<dt>Folder</dt><dd><span class="tag tag-folder">{{ email.folder }}</span></dd>{% endif %}
         <dt>UUID</dt><dd><code style="font-size: 0.85rem; color: var(--accent);">{{ email.uuid }}</code></dd>
         {% if email.thread_id %}
         <dt>Thread</dt><dd><a href="/thread/{{ email.thread_id }}">View thread</a></dd>
@@ -21,16 +22,19 @@
         {% if email.message_id %}
         <dt>Message-ID</dt><dd style="font-size: 0.8rem; color: var(--text-muted);">{{ email.message_id[:60] }}</dd>
         {% endif %}
+        {% if email.rule_matched %}<dt>Rule</dt><dd>{{ email.rule_matched }}</dd>{% endif %}
+        {% if email.sha256 %}<dt>SHA-256</dt><dd style="font-size: 0.8rem; color: var(--text-muted);">{{ email.sha256 }}</dd>{% endif %}
+        {% if email.size_bytes %}<dt>Size</dt><dd>{{ "{:,.0f}".format(email.size_bytes / 1024) }} KB</dd>{% endif %}
     </dl>
 </div>
 
 {% if attachments %}
 <div class="attachments">
-    <h3>📎 Attachments ({{ attachments | length }})</h3>
+    <h3>Attachments ({{ attachments | length }})</h3>
     {% for att in attachments %}
     <div class="att-item">
-        <a href="/attachment/{{ att.uuid }}">{{ att.original_filename }}</a>
-        <span class="att-size">{{ att.content_type }} · {{ "{:,.0f}".format(att.size_bytes / 1024) }} KB</span>
+        <a href="/attachment/{{ att.uuid }}">{{ att.filename or '(unnamed)' }}</a>
+        <span class="att-size">{{ att.content_type or '' }} {{ "· {:,.0f} KB".format(att.size_bytes / 1024) if att.size_bytes else '' }}</span>
     </div>
     {% endfor %}
 </div>
@@ -38,9 +42,11 @@
 
 <div class="email-body">{{ body_text }}</div>
 
+{% if email.source_path %}
 <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
     <a class="btn" href="/attachment/{{ email.uuid }}" style="background: var(--surface); color: var(--text); border: 1px solid var(--border);" download>
-        Source .eml
+        Download source
     </a>
 </div>
+{% endif %}
 {% endblock %}

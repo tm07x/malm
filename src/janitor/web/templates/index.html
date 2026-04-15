@@ -7,26 +7,39 @@
 
 <div class="stat-grid">
     <div class="stat-card">
-        <div class="label">Emails</div>
-        <div class="value">{{ "{:,}".format(stats.emails) }}</div>
+        <div class="label">Total Documents</div>
+        <div class="value">{{ "{:,}".format(stats.total) }}</div>
     </div>
+    {% for dtype, count in stats.by_type.items() %}
     <div class="stat-card">
-        <div class="label">Attachments</div>
-        <div class="value">{{ "{:,}".format(stats.attachments) }}</div>
+        <div class="label">{{ dtype | capitalize }}s</div>
+        <div class="value">{{ "{:,}".format(count) }}</div>
     </div>
+    {% endfor %}
     <div class="stat-card">
         <div class="label">Folders</div>
         <div class="value">{{ stats.folders | length }}</div>
     </div>
 </div>
 
+{% if stats.by_source %}
+<h3 style="margin-bottom: 1rem; color: var(--text-muted);">By Source</h3>
+<div class="stat-grid" style="margin-bottom: 2rem;">
+    {% for src, count in stats.by_source.items() %}
+    <div class="stat-card">
+        <div class="label">{{ src }}</div>
+        <div class="value">{{ "{:,}".format(count) }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <h3 style="margin-bottom: 1rem; color: var(--text-muted);">Folders</h3>
 <div class="folder-list">
-    {% for fc in folder_counts %}
-    <a href="/folder/{{ fc.pst_folder }}" style="text-decoration: none; color: inherit;">
+    {% for f in stats.folders %}
+    <a href="/folder/{{ f }}" style="text-decoration: none; color: inherit;">
         <div class="folder-item">
-            <span>📁 {{ fc.pst_folder }}</span>
-            <span class="folder-count">{{ "{:,}".format(fc.count) }}</span>
+            <span>{{ f }}</span>
         </div>
     </a>
     {% endfor %}
