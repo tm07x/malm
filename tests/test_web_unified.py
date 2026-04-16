@@ -77,7 +77,7 @@ def server(unified_db):
     env["JANITOR_DB_PATH"] = str(db_path)
 
     proc = subprocess.Popen(
-        ["uv", "run", "uvicorn", "malm.web.app:app", "--host", "127.0.0.1", "--port", "8899"],
+        ["uv", "run", "uvicorn", "malm.web.app:app", "--host", "127.0.0.1", "--port", "8878"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env=env,
     )
@@ -88,7 +88,7 @@ def server(unified_db):
             stderr = proc.stderr.read().decode() if proc.stderr else ""
             raise RuntimeError(f"Server exited early (rc={proc.returncode}): {stderr}")
         try:
-            resp = httpx.get("http://127.0.0.1:8899/", timeout=2)
+            resp = httpx.get("http://127.0.0.1:8878/", timeout=2)
             if resp.status_code == 200:
                 break
         except (httpx.ConnectError, httpx.TimeoutException):
@@ -104,7 +104,7 @@ def server(unified_db):
 
 def _get(path):
     import httpx
-    return httpx.get(f"http://127.0.0.1:8899{path}", timeout=10)
+    return httpx.get(f"http://127.0.0.1:8878{path}", timeout=10)
 
 
 class TestDashboard:
@@ -142,7 +142,7 @@ class TestSearch:
     def test_search_htmx_partial(self, server):
         import httpx
         r = httpx.get(
-            "http://127.0.0.1:8899/search?q=test",
+            "http://127.0.0.1:8878/search?q=test",
             headers={"HX-Request": "true"},
             timeout=10,
         )

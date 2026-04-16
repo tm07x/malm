@@ -55,14 +55,32 @@ def search(
     sender: str | None = None,
     after: str | None = None,
     before: str | None = None,
+    mode: str = "hybrid",
     page: int = 1,
     per_page: int = 50,
     db: DocumentStore = Depends(get_db),
 ):
     offset = (page - 1) * per_page
-    results = db.search(q, doc_type=doc_type, folder=folder, sender=sender,
-                        after=after, before=before, limit=per_page + 1,
-                        offset=offset)
+    has_filters = folder or sender or after or before
+
+    if q and db.has_vec and mode in ("hybrid", "semantic") and not has_filters:
+        try:
+            from malm.embeddings import get_embedding, serialize_f32
+            vec = get_embedding(q, input_type="query")
+            query_emb = serialize_f32(vec)
+            if mode == "semantic":
+                results = db.search_vec(query_emb, limit=per_page + 1, doc_type=doc_type)
+            else:
+                results = db.hybrid_search(q, query_emb, limit=per_page + 1, doc_type=doc_type)
+        except Exception:
+            results = db.search(q, doc_type=doc_type, folder=folder, sender=sender,
+                                after=after, before=before, limit=per_page + 1, offset=offset)
+    elif q and mode == "fts" and not has_filters:
+        results = db.search_fts(q, doc_type=doc_type, limit=per_page + 1, offset=offset)
+    else:
+        results = db.search(q, doc_type=doc_type, folder=folder, sender=sender,
+                            after=after, before=before, limit=per_page + 1, offset=offset)
+
     has_next = len(results) > per_page
     results = results[:per_page]
     folders = [r[0] for r in db.conn.execute(
@@ -70,7 +88,7 @@ def search(
     ).fetchall()]
 
     ctx = dict(results=results, q=q, doc_type=doc_type, folder=folder, sender=sender,
-               after=after, before=before, page=page, has_next=has_next)
+               after=after, before=before, mode=mode, page=page, has_next=has_next)
 
     if request.headers.get("HX-Request"):
         return _render(request, "partials/email_list.html", **ctx)

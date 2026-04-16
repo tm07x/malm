@@ -22,6 +22,11 @@
     <input type="text" name="sender" placeholder="Sender..." value="{{ sender or '' }}" style="width: 180px;">
     <input type="date" name="after" value="{{ after or '' }}" title="After date">
     <input type="date" name="before" value="{{ before or '' }}" title="Before date">
+    <select name="mode">
+        <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>Hybrid</option>
+        <option value="fts" {% if mode == 'fts' %}selected{% endif %}>Keyword (FTS)</option>
+        <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>Semantic</option>
+    </select>
     <button type="submit">Search</button>
 </form>
 

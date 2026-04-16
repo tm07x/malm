@@ -1,3 +1,5 @@
+import struct
+
 import pytest
 from malm.models import Document
 from malm.store import DocumentStore
@@ -231,3 +233,41 @@ class TestDedup:
             sha256="unique_hash", created_at="2024-01-01",
         )
         assert store.find_duplicate(doc) is None
+
+
+def _make_embedding(val: float = 0.1, dims: int = 1024) -> bytes:
+    return struct.pack(f"{dims}f", *([val] * dims))
+
+
+@pytest.mark.skipif(
+    not DocumentStore.__init__.__code__.co_varnames,
+    reason="skip marker only — real check below",
+)
+class TestVecSearch:
+    def _has_vec(self, store):
+        return store.has_vec
+
+    def test_store_and_search_vec(self, store):
+        if not self._has_vec(store):
+            pytest.skip("sqlite-vec not available")
+        store.insert(_email(uuid="v1", title="contract negotiation", body_text="terms and conditions"))
+        store.insert(_email(uuid="v2", title="lunch plans", body_text="pizza on friday"))
+        emb1 = _make_embedding(0.5)
+        emb2 = _make_embedding(-0.5)
+        store.store_embedding("v1", emb1)
+        store.store_embedding("v2", emb2)
+        results = store.search_vec(emb1, limit=10)
+        assert len(results) > 0
+        assert results[0]["uuid"] == "v1"
+
+    def test_hybrid_search(self, store):
+        if not self._has_vec(store):
+            pytest.skip("sqlite-vec not available")
+        store.insert(_email(uuid="h1", title="quarterly budget report", body_text="financial summary"))
+        store.insert(_email(uuid="h2", title="lunch invitation", body_text="pizza friday"))
+        store.store_embedding("h1", _make_embedding(0.8))
+        store.store_embedding("h2", _make_embedding(-0.8))
+        results = store.hybrid_search("budget", _make_embedding(0.8), limit=10)
+        assert len(results) > 0
+        uuids = [r["uuid"] for r in results]
+        assert "h1" in uuids

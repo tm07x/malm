@@ -300,5 +300,53 @@ class DocumentStore:
         )
         self.conn.commit()
 
+    def store_embedding(self, uuid: str, embedding: bytes):
+        row = self.conn.execute("SELECT rowid FROM documents WHERE uuid = ?", (uuid,)).fetchone()
+        if not row or not self._has_vec:
+            return
+        rowid = row[0]
+        self.conn.execute("DELETE FROM documents_vec WHERE doc_rowid = ?", (rowid,))
+        self.conn.execute("INSERT INTO documents_vec (doc_rowid, embedding) VALUES (?, ?)", (rowid, embedding))
+        self.conn.commit()
+
+    def search_vec(self, query_embedding: bytes, limit: int = 20, doc_type: str | None = None) -> list[dict]:
+        if not self._has_vec:
+            return []
+        sql = (
+            "SELECT d.*, v.distance "
+            "FROM documents_vec v JOIN documents d ON v.doc_rowid = d.rowid "
+            "WHERE v.embedding MATCH ? AND k = ?"
+        )
+        params = [query_embedding, limit * 2 if doc_type else limit]
+        rows = self.conn.execute(sql, params).fetchall()
+        results = [dict(r) for r in rows]
+        if doc_type:
+            results = [r for r in results if r["doc_type"] == doc_type][:limit]
+        return results
+
+    def hybrid_search(self, query: str, query_embedding: bytes, limit: int = 20,
+                      fts_weight: float = 0.3, vec_weight: float = 0.7,
+                      doc_type: str | None = None) -> list[dict]:
+        fts_results = self.search_fts(query, doc_type=doc_type, limit=limit * 2)
+        vec_results = self.search_vec(query_embedding, limit=limit * 2, doc_type=doc_type)
+
+        scores: dict[str, dict] = {}
+        k = 60
+
+        for rank, row in enumerate(fts_results):
+            uid = row["uuid"]
+            scores[uid] = {**row, "score": fts_weight / (k + rank + 1)}
+
+        for rank, row in enumerate(vec_results):
+            uid = row["uuid"]
+            rrf = vec_weight / (k + rank + 1)
+            if uid in scores:
+                scores[uid]["score"] += rrf
+            else:
+                scores[uid] = {**row, "score": rrf}
+
+        ranked = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+        return ranked[:limit]
+
     def close(self):
         self.conn.close()
