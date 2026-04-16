@@ -9,7 +9,7 @@ from pathlib import Path
 
 from malm.store import DocumentStore
 
-DEFAULT_DB = os.path.expanduser("~/Documents/Legal-Discovery/discovery.db")
+DEFAULT_DB = os.path.expanduser("~/Documents/Legal-Discovery/unified.db")
 DEFAULT_EXPORT_DIR = os.path.expanduser("~/Documents/Legal-Discovery/exports")
 
 

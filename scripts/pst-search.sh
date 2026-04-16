@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-PST_FILE="/Users/tm07x/Documents/Tvistesak - Mai /Dump/Backups/lasse@reinconsult.no.pst"
+PST_FILE="${DISCOVERY_PST_PATH:?Set DISCOVERY_PST_PATH to your .pst file}"
 EXTRACT_DIR="${TMPDIR:-/tmp}/pst-extract-$$"
 
 cleanup() { rm -rf "$EXTRACT_DIR" 2>/dev/null || true; }

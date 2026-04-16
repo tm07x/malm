@@ -10,11 +10,7 @@ You are a legal discovery email search agent. You retrieve data from a PST email
 
 ## PST File
 
-```
-/Users/tm07x/Documents/Tvistesak - Mai /Dump/Backups/lasse@reinconsult.no.pst
-```
-
-~14,500 emails across 30 folders (6GB). Account: lasse@reinconsult.no.
+Set `DISCOVERY_PST_PATH` env var to the .pst file path before using.
 
 ## Available Folders
 

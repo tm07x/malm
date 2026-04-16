@@ -15,12 +15,12 @@ from malm.store import DocumentStore
 
 PST_FILE = os.environ.get(
     "DISCOVERY_PST_PATH",
-    str(Path.home() / "Documents" / "Tvistesak - Mai " / "Dump" / "Backups" / "lasse@reinconsult.no.pst"),
+    "",
 )
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
 SOURCE_DIR = DISCOVERY_ROOT / "source-doc"
 MD_DIR = DISCOVERY_ROOT / "MD"
-DB_PATH = DISCOVERY_ROOT / "discovery.db"
+DB_PATH = DISCOVERY_ROOT / "unified.db"
 # Persistent cache of readpst output so the 6GB PST is only extracted once
 EML_CACHE_DIR = DISCOVERY_ROOT / ".eml-cache"
 

@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from malm.store import DocumentStore
 
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
-DB_PATH = DISCOVERY_ROOT / "discovery.db"
+DB_PATH = DISCOVERY_ROOT / "unified.db"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 app = FastAPI(title="Legal Discovery")
