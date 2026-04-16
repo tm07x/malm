@@ -23,7 +23,7 @@ def _now() -> str:
 
 class DocumentStore:
     def __init__(self, path: str):
-        self.conn = sqlite3.connect(path)
+        self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.row_factory = sqlite3.Row
         self._has_vec = False

@@ -37,6 +37,15 @@ def test_extract_text_json(tmp_path):
     assert "value" in result["body_text"]
 
 
+def test_extract_text_has_truncated_field(tmp_path):
+    f = tmp_path / "hello.txt"
+    f.write_text("hello world")
+    result = extract_text(f)
+    assert result is not None
+    assert "truncated" in result
+    assert result["truncated"] is False
+
+
 def test_extract_text_unsupported(tmp_path):
     f = tmp_path / "image.png"
     f.write_bytes(b"\x89PNG fake")

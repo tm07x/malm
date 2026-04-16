@@ -158,6 +158,18 @@ def test_search_limit_respected(store):
     assert len(results) == 3
 
 
+def test_search_offset(store):
+    for i in range(10):
+        store.insert(_email(uuid=f"e{i}", date_sent=f"2025-01-{i+1:02d}T00:00:00Z"))
+    page1 = store.search(limit=3, offset=0)
+    page2 = store.search(limit=3, offset=3)
+    assert len(page1) == 3
+    assert len(page2) == 3
+    page1_uuids = {r["uuid"] for r in page1}
+    page2_uuids = {r["uuid"] for r in page2}
+    assert page1_uuids.isdisjoint(page2_uuids)
+
+
 class TestExtractionMetadata:
     def test_store_extraction_metadata(self, store):
         store.insert(Document(

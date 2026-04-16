@@ -143,7 +143,7 @@ def read_xml(path: str | Path) -> dict:
                 values.append(v.strip())
     if not values:
         return None
-    return _make_result(values[:2000])
+    return _make_result(values)
 
 
 def read_json_file(path: str | Path) -> dict:
@@ -170,7 +170,7 @@ def read_json_file(path: str | Path) -> dict:
     extract(data)
     if not values:
         return None
-    return _make_result(values[:2000])
+    return _make_result(values)
 
 
 CONTENT_READERS = {

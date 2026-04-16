@@ -81,16 +81,15 @@ def test_db(tmp_path):
 def client(test_db):
     db_path, tmp_path = test_db
 
+    db = DocumentStore(db_path)
+
     def override_get_db():
-        db = DocumentStore(db_path)
-        try:
-            yield db
-        finally:
-            db.close()
+        return db
 
     app.dependency_overrides[get_db] = override_get_db
     yield TestClient(app)
     app.dependency_overrides.clear()
+    db.close()
 
 
 class TestDashboard:
