@@ -1,6 +1,5 @@
 import mimetypes
 import os
-from collections.abc import Generator
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -27,12 +26,14 @@ def _resolve_db_path() -> str:
     return str(DB_PATH)
 
 
-def get_db() -> Generator[DocumentStore]:
-    db = DocumentStore(_resolve_db_path())
-    try:
-        yield db
-    finally:
-        db.close()
+_store: DocumentStore | None = None
+
+
+def get_db() -> DocumentStore:
+    global _store
+    if _store is None:
+        _store = DocumentStore(_resolve_db_path())
+    return _store
 
 
 def _render(request: Request, template: str, **ctx):
@@ -58,8 +59,10 @@ def search(
     per_page: int = 50,
     db: DocumentStore = Depends(get_db),
 ):
+    offset = (page - 1) * per_page
     results = db.search(q, doc_type=doc_type, folder=folder, sender=sender,
-                        after=after, before=before, limit=per_page + 1)
+                        after=after, before=before, limit=per_page + 1,
+                        offset=offset)
     has_next = len(results) > per_page
     results = results[:per_page]
     folders = [r[0] for r in db.conn.execute(
@@ -121,7 +124,8 @@ def serve_attachment(uuid: str, db: DocumentStore = Depends(get_db)):
 @app.get("/folder/{folder_name:path}", response_class=HTMLResponse)
 def folder_view(request: Request, folder_name: str, page: int = 1, per_page: int = 50,
                 db: DocumentStore = Depends(get_db)):
-    results = db.search("", folder=folder_name, limit=per_page + 1)
+    offset = (page - 1) * per_page
+    results = db.search("", folder=folder_name, limit=per_page + 1, offset=offset)
     has_next = len(results) > per_page
     results = results[:per_page]
     return _render(request, "folder.html",

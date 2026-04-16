@@ -204,10 +204,11 @@ class DocumentStore:
     def search(self, query: str = "", *, doc_type: str | None = None,
                folder: str | None = None, sender: str | None = None,
                source: str | None = None, after: str | None = None,
-               before: str | None = None, limit: int = 50) -> list[dict]:
+               before: str | None = None, limit: int = 50,
+               offset: int = 0) -> list[dict]:
         has_filters = doc_type or folder or sender or source or after or before
         if query and not has_filters:
-            return self.search_fts(query, limit=limit)
+            return self.search_fts(query, limit=limit, offset=offset)
 
         sql = "SELECT * FROM documents WHERE 1=1"
         params: list = []
@@ -233,8 +234,9 @@ class DocumentStore:
         if before:
             sql += " AND date_sent <= ?"
             params.append(before)
-        sql += " ORDER BY date_sent DESC LIMIT ?"
+        sql += " ORDER BY date_sent DESC LIMIT ? OFFSET ?"
         params.append(limit)
+        params.append(offset)
         return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
 
     @staticmethod
@@ -246,7 +248,7 @@ class DocumentStore:
         return " ".join(t + "*" for t in tokens)
 
     def search_fts(self, query: str, *, doc_type: str | None = None,
-                   limit: int = 50) -> list[dict]:
+                   limit: int = 50, offset: int = 0) -> list[dict]:
         escaped = self._escape_fts_query(query)
         sql = (
             "SELECT d.*, snippet(documents_fts, 3, '>>>', '<<<', '...', 64) AS snippet "
@@ -257,8 +259,9 @@ class DocumentStore:
         if doc_type:
             sql += " AND d.doc_type = ?"
             params.append(doc_type)
-        sql += " ORDER BY rank LIMIT ?"
+        sql += " ORDER BY rank LIMIT ? OFFSET ?"
         params.append(limit)
+        params.append(offset)
         try:
             rows = self.conn.execute(sql, params).fetchall()
         except Exception:

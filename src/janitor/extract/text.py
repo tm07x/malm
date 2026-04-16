@@ -7,19 +7,22 @@ from pathlib import Path
 import openpyxl
 
 
-def _make_result(cell_values, sheet_names=None, headers=None, sample_rows=None):
+def _make_result(cell_values, sheet_names=None, headers=None, sample_rows=None, truncated=False):
     return {
         "body_text": " ".join(cell_values),
         "sheet_names": sheet_names or [],
         "headers": headers or {},
         "sample_rows": sample_rows or {},
+        "truncated": truncated,
     }
 
 
-def read_xlsx(path: str | Path, max_rows: int = 50) -> dict:
+def read_xlsx(path: str | Path, max_rows: int = 10000) -> dict:
     wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-    result = _make_result([], sheet_names=wb.sheetnames, headers={}, sample_rows={})
     cell_values = []
+    truncated = False
+    headers_map = {}
+    sample_rows_map = {}
 
     for name in wb.sheetnames:
         ws = wb[name]
@@ -27,12 +30,12 @@ def read_xlsx(path: str | Path, max_rows: int = 50) -> dict:
 
         first_row = next(rows_iter, None)
         if first_row is None:
-            result["headers"][name] = []
-            result["sample_rows"][name] = []
+            headers_map[name] = []
+            sample_rows_map[name] = []
             continue
 
         headers = [str(c) if c is not None else "" for c in first_row]
-        result["headers"][name] = headers
+        headers_map[name] = headers
 
         for h in headers:
             if h:
@@ -41,6 +44,7 @@ def read_xlsx(path: str | Path, max_rows: int = 50) -> dict:
         sample = []
         for i, row in enumerate(rows_iter):
             if i >= max_rows:
+                truncated = True
                 break
             row_dict = {}
             for j, val in enumerate(row):
@@ -51,19 +55,21 @@ def read_xlsx(path: str | Path, max_rows: int = 50) -> dict:
                         cell_values.append(val.strip())
             if row_dict:
                 sample.append(row_dict)
-        result["sample_rows"][name] = sample
+        sample_rows_map[name] = sample
 
     wb.close()
-    result["body_text"] = " ".join(cell_values)
-    return result
+    return _make_result(cell_values, sheet_names=wb.sheetnames, headers=headers_map,
+                        sample_rows=sample_rows_map, truncated=truncated)
 
 
-def read_pdf(path: str | Path, max_pages: int = 10) -> dict:
+def read_pdf(path: str | Path, max_pages: int = 500) -> dict:
     import pymupdf
     doc = pymupdf.open(str(path))
     values = []
+    truncated = False
     for i, page in enumerate(doc):
         if i >= max_pages:
+            truncated = True
             break
         text = page.get_text().strip()
         if text:
@@ -71,7 +77,7 @@ def read_pdf(path: str | Path, max_pages: int = 10) -> dict:
     doc.close()
     if not values:
         return None
-    return _make_result(values[:2000])
+    return _make_result(values, truncated=truncated)
 
 
 def read_docx(path: str | Path) -> dict:
@@ -90,19 +96,23 @@ def read_docx(path: str | Path) -> dict:
                     values.append(text)
     if not values:
         return None
-    return _make_result(values[:2000])
+    return _make_result(values)
 
 
-def read_text(path: str | Path) -> dict:
-    text = Path(path).read_text(errors="replace")[:8000]
+def read_text(path: str | Path, max_chars: int = 500000) -> dict:
+    raw = Path(path).read_text(errors="replace")
+    truncated = len(raw) > max_chars
+    text = raw[:max_chars]
     values = text.split()
     if not values:
         return None
-    return _make_result(values[:2000])
+    return _make_result(values, truncated=truncated)
 
 
-def read_csv_file(path: str | Path) -> dict:
-    text = Path(path).read_text(errors="replace")[:50000]
+def read_csv_file(path: str | Path, max_chars: int = 500000) -> dict:
+    raw = Path(path).read_text(errors="replace")
+    truncated = len(raw) > max_chars
+    text = raw[:max_chars]
     reader = csv.reader(io.StringIO(text))
     values = []
     headers = {}
@@ -112,13 +122,11 @@ def read_csv_file(path: str | Path) -> dict:
             first_row = row
             headers["sheet1"] = row
             values.extend(row)
-        elif i <= 50:
-            values.extend(c for c in row if c.strip())
         else:
-            break
+            values.extend(c for c in row if c.strip())
     if not values:
         return None
-    return _make_result(values[:2000], headers=headers)
+    return _make_result(values, headers=headers, truncated=truncated)
 
 
 def read_xml(path: str | Path) -> dict:
