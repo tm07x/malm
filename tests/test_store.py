@@ -156,3 +156,66 @@ def test_search_limit_respected(store):
         store.insert(_email(uuid=f"e{i}", date_sent=f"2025-01-{i+1:02d}T00:00:00Z"))
     results = store.search(limit=3)
     assert len(results) == 3
+
+
+class TestExtractionMetadata:
+    def test_store_extraction_metadata(self, store):
+        store.insert(Document(
+            uuid="em1", doc_type="file", source="filesystem",
+            filename="scan.pdf", created_at="2024-01-01",
+            extraction_metadata='{"method": "ocr", "status": "ok"}',
+        ))
+        doc = store.get("em1")
+        assert doc["extraction_metadata"] == '{"method": "ocr", "status": "ok"}'
+
+    def test_store_synthetic_text(self, store):
+        store.insert(Document(
+            uuid="syn1", doc_type="email", source="pst",
+            title="Messy email", body_text="Hei\n\nDette er en ryddig melding",
+            synthetic_text="This is a clean message about X",
+            created_at="2024-01-01",
+        ))
+        doc = store.get("syn1")
+        assert doc["body_text"] == "Hei\n\nDette er en ryddig melding"
+        assert doc["synthetic_text"] == "This is a clean message about X"
+
+
+class TestDedup:
+    def test_dedup_by_message_id(self, store):
+        doc1 = Document(
+            uuid="dup1", doc_type="email", source="pst",
+            message_id="<msg@example.com>", title="Original",
+            created_at="2024-01-01",
+        )
+        store.insert(doc1)
+        doc2 = Document(
+            uuid="dup2", doc_type="email", source="filesystem",
+            message_id="<msg@example.com>", title="Duplicate",
+            created_at="2024-01-01",
+        )
+        existing = store.find_duplicate(doc2)
+        assert existing is not None
+        assert existing["uuid"] == "dup1"
+
+    def test_dedup_by_sha256(self, store):
+        doc1 = Document(
+            uuid="f1", doc_type="file", source="filesystem",
+            sha256="abc123", filename="report.pdf",
+            created_at="2024-01-01",
+        )
+        store.insert(doc1)
+        doc2 = Document(
+            uuid="f2", doc_type="file", source="filedrop",
+            sha256="abc123", filename="report_copy.pdf",
+            created_at="2024-01-01",
+        )
+        existing = store.find_duplicate(doc2)
+        assert existing is not None
+        assert existing["uuid"] == "f1"
+
+    def test_no_dup_when_different(self, store):
+        doc = Document(
+            uuid="unique", doc_type="file", source="filesystem",
+            sha256="unique_hash", created_at="2024-01-01",
+        )
+        assert store.find_duplicate(doc) is None

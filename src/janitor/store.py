@@ -11,7 +11,7 @@ _COLUMNS = [
     "content_type", "title", "body_text", "body_preview", "sender",
     "recipients", "cc", "date_sent", "message_id", "in_reply_to",
     "references_header", "thread_id", "folder", "rule_matched", "tags",
-    "status", "created_at", "updated_at",
+    "status", "created_at", "updated_at", "extraction_metadata", "synthetic_text",
 ]
 
 _FTS_COLUMNS = ["title", "sender", "recipients", "body_text", "filename", "folder", "tags"]
@@ -28,6 +28,7 @@ class DocumentStore:
         self.conn.row_factory = sqlite3.Row
         self._has_vec = False
         self._init_schema()
+        self._migrate()
 
     def _init_schema(self):
         self.conn.executescript("""
@@ -60,7 +61,9 @@ class DocumentStore:
                 tags TEXT,
                 status TEXT DEFAULT 'indexed',
                 created_at TEXT NOT NULL,
-                updated_at TEXT
+                updated_at TEXT,
+                extraction_metadata TEXT,
+                synthetic_text TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_doc_type ON documents(doc_type);
@@ -72,6 +75,7 @@ class DocumentStore:
             CREATE INDEX IF NOT EXISTS idx_date_sent ON documents(date_sent);
             CREATE INDEX IF NOT EXISTS idx_status ON documents(status);
             CREATE INDEX IF NOT EXISTS idx_folder ON documents(folder);
+            CREATE INDEX IF NOT EXISTS idx_message_id ON documents(message_id);
 
             CREATE TABLE IF NOT EXISTS ingest_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,6 +120,14 @@ class DocumentStore:
             self._has_vec = True
         except (ImportError, Exception):
             self._has_vec = False
+
+    def _migrate(self):
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(documents)").fetchall()}
+        new_cols = {"extraction_metadata": "TEXT", "synthetic_text": "TEXT"}
+        for col, typ in new_cols.items():
+            if col not in cols:
+                self.conn.execute(f"ALTER TABLE documents ADD COLUMN {col} {typ}")
+        self.conn.commit()
 
     @property
     def has_vec(self) -> bool:
@@ -167,6 +179,20 @@ class DocumentStore:
             "SELECT * FROM documents WHERE sha256 = ?", (sha256,)
         ).fetchone()
         return dict(row) if row else None
+
+    def find_duplicate(self, doc: "Document") -> dict | None:
+        """Check if a document already exists across any source.
+        For emails: match by message_id. For files: match by sha256."""
+        if doc.message_id:
+            row = self.conn.execute(
+                "SELECT * FROM documents WHERE message_id = ? AND doc_type = 'email'",
+                (doc.message_id,)
+            ).fetchone()
+            if row:
+                return dict(row)
+        if doc.sha256:
+            return self.find_by_sha256(doc.sha256)
+        return None
 
     def get_thread(self, thread_id: str) -> list[dict]:
         rows = self.conn.execute(

@@ -36,3 +36,8 @@ class Document:
     tags: str | None = None
     status: str = "indexed"
     updated_at: str | None = None
+
+    # Extraction health — JSON: {"method": "native"|"ocr"|"llm", "status": "ok"|"failed"|"partial", "error": "..."}
+    extraction_metadata: str | None = None
+    # Synthetic rewrite — LLM-cleaned version of body_text, never overwrites original
+    synthetic_text: str | None = None
