@@ -10,8 +10,8 @@ from email.header import decode_header as _decode_header
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-from janitor.models import Document
-from janitor.store import DocumentStore
+from malm.models import Document
+from malm.store import DocumentStore
 
 PST_FILE = os.environ.get(
     "DISCOVERY_PST_PATH",

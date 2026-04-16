@@ -7,7 +7,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 
 DEFAULT_DB = os.path.expanduser("~/Documents/Legal-Discovery/discovery.db")
 DEFAULT_EXPORT_DIR = os.path.expanduser("~/Documents/Legal-Discovery/exports")

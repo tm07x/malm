@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from janitor.ingest.pst import PstIngestor, _sanitize
-from janitor.store import DocumentStore
+from malm.ingest.pst import PstIngestor, _sanitize
+from malm.store import DocumentStore
 
 
 def _make_eml(

@@ -3,7 +3,7 @@ import sqlite3
 from dataclasses import asdict
 from datetime import datetime, timezone
 
-from janitor.models import Document
+from malm.models import Document
 
 _COLUMNS = [
     "uuid", "doc_type", "parent_uuid", "source", "source_path", "stored_path",

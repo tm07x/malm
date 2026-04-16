@@ -32,7 +32,7 @@
 ## File Structure (Target)
 
 ```
-src/janitor/
+src/malm/
   # Core document store
   store.py              ← NEW: unified SQLite DB (replaces db.py + discovery_db.py)
   models.py             ← NEW: dataclasses for Document, Email, Attachment, SearchResult
@@ -41,7 +41,7 @@ src/janitor/
   ingest/
     __init__.py
     pst.py              ← MOVE: from pst_extract.py (PST → documents)
-    filesystem.py       ← MOVE: from janitor.py (~/Downloads scan → documents)
+    filesystem.py       ← MOVE: from malm.py (~/Downloads scan → documents)
     filedrop.py         ← NEW: watch a directory, ingest new files on arrival
 
   # Content extraction
@@ -154,11 +154,11 @@ CREATE TABLE ingest_runs (
 ### Task 1: Unified Document Store
 
 **Files:**
-- Create: `src/janitor/models.py`
-- Create: `src/janitor/store.py`
+- Create: `src/malm/models.py`
+- Create: `src/malm/store.py`
 - Create: `tests/test_store.py`
-- Reference: `src/janitor/db.py` (existing JanitorDB pattern)
-- Reference: `src/janitor/discovery_db.py` (existing DiscoveryDB pattern)
+- Reference: `src/malm/db.py` (existing JanitorDB pattern)
+- Reference: `src/malm/discovery_db.py` (existing DiscoveryDB pattern)
 
 - [ ] **Step 1: Write failing tests for the document store**
 
@@ -167,8 +167,8 @@ CREATE TABLE ingest_runs (
 import tempfile
 from pathlib import Path
 import pytest
-from janitor.store import DocumentStore
-from janitor.models import Document
+from malm.store import DocumentStore
+from malm.models import Document
 
 
 @pytest.fixture
@@ -283,7 +283,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'janitor.store'`
 - [ ] **Step 3: Create models.py**
 
 ```python
-# src/janitor/models.py
+# src/malm/models.py
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -330,12 +330,12 @@ class Document:
 - [ ] **Step 4: Create store.py**
 
 ```python
-# src/janitor/store.py
+# src/malm/store.py
 import sqlite3
 from dataclasses import asdict
 from datetime import datetime, timezone
 
-from janitor.models import Document
+from malm.models import Document
 
 try:
     import sqlite_vec
@@ -560,7 +560,7 @@ Expected: ALL PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/janitor/models.py src/janitor/store.py tests/test_store.py
+git add src/malm/models.py src/malm/store.py tests/test_store.py
 git commit -m "feat: unified document store with FTS5 search"
 ```
 
@@ -569,13 +569,13 @@ git commit -m "feat: unified document store with FTS5 search"
 ### Task 2: Content Extraction Module
 
 **Files:**
-- Create: `src/janitor/extract/__init__.py`
-- Create: `src/janitor/extract/text.py`
-- Create: `src/janitor/extract/email_parser.py`
-- Create: `src/janitor/extract/hasher.py`
+- Create: `src/malm/extract/__init__.py`
+- Create: `src/malm/extract/text.py`
+- Create: `src/malm/extract/email_parser.py`
+- Create: `src/malm/extract/hasher.py`
 - Create: `tests/test_extract.py`
-- Reference: `src/janitor/content.py` (existing file readers)
-- Reference: `src/janitor/pst_extract.py` (_parse_eml, _decode_mime_header)
+- Reference: `src/malm/content.py` (existing file readers)
+- Reference: `src/malm/pst_extract.py` (_parse_eml, _decode_mime_header)
 - Reference: `/Users/tm07x/Projects/fend-search/build_index.py` (SHA-256 hashing)
 
 - [ ] **Step 1: Write failing tests**
@@ -586,9 +586,9 @@ import tempfile
 from pathlib import Path
 import pytest
 
-from janitor.extract.text import extract_text
-from janitor.extract.email_parser import parse_eml
-from janitor.extract.hasher import sha256_file
+from malm.extract.text import extract_text
+from malm.extract.email_parser import parse_eml
+from malm.extract.hasher import sha256_file
 
 
 class TestTextExtraction:
@@ -681,7 +681,7 @@ Expected: FAIL — `ModuleNotFoundError`
 - [ ] **Step 3: Create hasher.py**
 
 ```python
-# src/janitor/extract/hasher.py
+# src/malm/extract/hasher.py
 import hashlib
 from pathlib import Path
 
@@ -696,18 +696,18 @@ def sha256_file(path: str | Path) -> str:
 
 - [ ] **Step 4: Create email_parser.py**
 
-Move `_parse_eml`, `_decode_mime_header`, `_decode_payload`, `_unfold_header` from `pst_extract.py` into this standalone module. The function signature becomes `parse_eml(path: Path) -> dict` (same return shape as current `_parse_eml`). Copy the exact implementations from `src/janitor/pst_extract.py` lines 57-163.
+Move `_parse_eml`, `_decode_mime_header`, `_decode_payload`, `_unfold_header` from `pst_extract.py` into this standalone module. The function signature becomes `parse_eml(path: Path) -> dict` (same return shape as current `_parse_eml`). Copy the exact implementations from `src/malm/pst_extract.py` lines 57-163.
 
 - [ ] **Step 5: Create text.py**
 
-Merge content extraction from `src/janitor/content.py` (the `CONTENT_READERS` dict and all `read_*` functions) into `extract_text(path) -> dict | None`. Same return shape: `{"body_text": str, "sheet_names": list, "headers": dict, "sample_rows": dict}`. The key difference: `body_text` replaces `cell_values` as the primary field — it's a single string, not a list.
+Merge content extraction from `src/malm/content.py` (the `CONTENT_READERS` dict and all `read_*` functions) into `extract_text(path) -> dict | None`. Same return shape: `{"body_text": str, "sheet_names": list, "headers": dict, "sample_rows": dict}`. The key difference: `body_text` replaces `cell_values` as the primary field — it's a single string, not a list.
 
-- [ ] **Step 6: Create `src/janitor/extract/__init__.py`**
+- [ ] **Step 6: Create `src/malm/extract/__init__.py`**
 
 ```python
-from janitor.extract.text import extract_text
-from janitor.extract.email_parser import parse_eml
-from janitor.extract.hasher import sha256_file
+from malm.extract.text import extract_text
+from malm.extract.email_parser import parse_eml
+from malm.extract.hasher import sha256_file
 ```
 
 - [ ] **Step 7: Run tests**
@@ -718,7 +718,7 @@ Expected: ALL PASS
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/janitor/extract/ tests/test_extract.py
+git add src/malm/extract/ tests/test_extract.py
 git commit -m "feat: unified content extraction module"
 ```
 
@@ -727,11 +727,11 @@ git commit -m "feat: unified content extraction module"
 ### Task 3: PST Ingestor (Rewrite on Unified Store)
 
 **Files:**
-- Create: `src/janitor/ingest/__init__.py`
-- Create: `src/janitor/ingest/pst.py`
+- Create: `src/malm/ingest/__init__.py`
+- Create: `src/malm/ingest/pst.py`
 - Create: `tests/test_ingest_pst.py`
-- Reference: `src/janitor/pst_extract.py` (existing implementation)
-- Reference: `src/janitor/extract/email_parser.py` (from Task 2)
+- Reference: `src/malm/pst_extract.py` (existing implementation)
+- Reference: `src/malm/extract/email_parser.py` (from Task 2)
 
 - [ ] **Step 1: Write failing tests**
 
@@ -740,8 +740,8 @@ git commit -m "feat: unified content extraction module"
 import tempfile
 from pathlib import Path
 import pytest
-from janitor.store import DocumentStore
-from janitor.ingest.pst import PstIngestor
+from malm.store import DocumentStore
+from malm.ingest.pst import PstIngestor
 
 
 @pytest.fixture
@@ -798,7 +798,7 @@ Secondary method: `ingest_eml_dir(eml_dir: Path, pst_folder: str = "Root") -> di
 Run: `uv run pytest tests/test_ingest_pst.py -v`
 
 ```bash
-git add src/janitor/ingest/ tests/test_ingest_pst.py
+git add src/malm/ingest/ tests/test_ingest_pst.py
 git commit -m "feat: PST ingestor on unified document store"
 ```
 
@@ -807,10 +807,10 @@ git commit -m "feat: PST ingestor on unified document store"
 ### Task 4: Filesystem Ingestor (Rewrite Janitor on Unified Store)
 
 **Files:**
-- Create: `src/janitor/ingest/filesystem.py`
+- Create: `src/malm/ingest/filesystem.py`
 - Create: `tests/test_ingest_filesystem.py`
-- Reference: `src/janitor/janitor.py` (existing run_janitor)
-- Reference: `src/janitor/rules.py` (rule matching — kept as-is)
+- Reference: `src/malm/janitor.py` (existing run_janitor)
+- Reference: `src/malm/rules.py` (rule matching — kept as-is)
 
 - [ ] **Step 1: Write failing tests**
 
@@ -819,8 +819,8 @@ git commit -m "feat: PST ingestor on unified document store"
 import tempfile
 from pathlib import Path
 import pytest
-from janitor.store import DocumentStore
-from janitor.ingest.filesystem import FilesystemIngestor
+from malm.store import DocumentStore
+from malm.ingest.filesystem import FilesystemIngestor
 
 RULES = {
     "source": "PLACEHOLDER",
@@ -883,7 +883,7 @@ class TestFilesystemIngestor:
 Run: `uv run pytest tests/test_ingest_filesystem.py -v`
 
 ```bash
-git add src/janitor/ingest/filesystem.py tests/test_ingest_filesystem.py
+git add src/malm/ingest/filesystem.py tests/test_ingest_filesystem.py
 git commit -m "feat: filesystem ingestor on unified document store"
 ```
 
@@ -892,13 +892,13 @@ git commit -m "feat: filesystem ingestor on unified document store"
 ### Task 5: Unified Web UI
 
 **Files:**
-- Modify: `src/janitor/web/app.py`
-- Modify: `src/janitor/web/templates/index.html`
-- Modify: `src/janitor/web/templates/search.html`
-- Modify: `src/janitor/web/templates/partials/email_list.html`
-- Modify: `src/janitor/web/templates/email_detail.html`
+- Modify: `src/malm/web/app.py`
+- Modify: `src/malm/web/templates/index.html`
+- Modify: `src/malm/web/templates/search.html`
+- Modify: `src/malm/web/templates/partials/email_list.html`
+- Modify: `src/malm/web/templates/email_detail.html`
 - Create: `tests/test_web_unified.py`
-- Reference: `src/janitor/store.py` (from Task 1)
+- Reference: `src/malm/store.py` (from Task 1)
 
 - [ ] **Step 1: Update app.py to use DocumentStore**
 
@@ -922,7 +922,7 @@ import httpx
 @pytest.fixture(scope="module")
 def server():
     proc = subprocess.Popen(
-        ["uv", "run", "uvicorn", "janitor.web.app:app", "--host", "127.0.0.1", "--port", "8877"],
+        ["uv", "run", "uvicorn", "malm.web.app:app", "--host", "127.0.0.1", "--port", "8877"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     time.sleep(3)
@@ -952,7 +952,7 @@ def test_api_stats(server):
 Run: `uv run pytest tests/test_web_unified.py -v`
 
 ```bash
-git add src/janitor/web/ tests/test_web_unified.py
+git add src/malm/web/ tests/test_web_unified.py
 git commit -m "feat: unified web UI for all document types"
 ```
 
@@ -962,7 +962,7 @@ git commit -m "feat: unified web UI for all document types"
 
 **Files:**
 - Create: `scripts/migrate-to-unified.py`
-- Modify: `src/janitor/export.py` (use DocumentStore)
+- Modify: `src/malm/export.py` (use DocumentStore)
 - Modify: `CLAUDE.md`
 - Modify: `agents/pst-search.md`
 
@@ -990,7 +990,7 @@ Expected: ALL PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add scripts/migrate-to-unified.py src/janitor/export.py CLAUDE.md agents/
+git add scripts/migrate-to-unified.py src/malm/export.py CLAUDE.md agents/
 git commit -m "feat: migration script, export on unified store, updated docs"
 ```
 
@@ -999,11 +999,11 @@ git commit -m "feat: migration script, export on unified store, updated docs"
 ### Task 7: Delete Old Code
 
 **Files:**
-- Delete: `src/janitor/db.py` (replaced by store.py)
-- Delete: `src/janitor/discovery_db.py` (replaced by store.py)
-- Delete: `src/janitor/pst_extract.py` (replaced by ingest/pst.py + extract/)
-- Delete: `src/janitor/janitor.py` (replaced by ingest/filesystem.py)
-- Delete: `src/janitor/content.py` (replaced by extract/text.py)
+- Delete: `src/malm/db.py` (replaced by store.py)
+- Delete: `src/malm/discovery_db.py` (replaced by store.py)
+- Delete: `src/malm/pst_extract.py` (replaced by ingest/pst.py + extract/)
+- Delete: `src/malm/janitor.py` (replaced by ingest/filesystem.py)
+- Delete: `src/malm/content.py` (replaced by extract/text.py)
 - Update: tests that imported old modules
 - Keep: `rules.py`, `embeddings.py`, `lock.py`, `export.py`, `web/`
 

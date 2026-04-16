@@ -1,5 +1,5 @@
 import pytest
-from janitor.rules import match_rule, load_rules
+from malm.rules import match_rule, load_rules
 
 RULES = {
     "source": "~/Downloads",

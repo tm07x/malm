@@ -3,11 +3,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from janitor.extract.hasher import sha256_file
-from janitor.extract.text import extract_text
-from janitor.models import Document
-from janitor.rules import match_rule
-from janitor.store import DocumentStore
+from malm.extract.hasher import sha256_file
+from malm.extract.text import extract_text
+from malm.models import Document
+from malm.rules import match_rule
+from malm.store import DocumentStore
 
 
 def _now() -> str:

@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from janitor.models import Document
-from janitor.store import DocumentStore
+from malm.models import Document
+from malm.store import DocumentStore
 
 DISCOVERY_DB = os.path.expanduser("~/Documents/Legal-Discovery/discovery.db")
 UNIFIED_DB = os.path.expanduser("~/Documents/Legal-Discovery/unified.db")

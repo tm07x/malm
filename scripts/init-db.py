@@ -21,7 +21,7 @@ def init():
 
     # Trigger schema creation by importing db
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-    from janitor.db import JanitorDB
+    from malm.db import JanitorDB
     db = JanitorDB(str(DATA_DIR / "janitor.db"))
     db.close()
     print(f"Database ready at {DATA_DIR / 'janitor.db'}")

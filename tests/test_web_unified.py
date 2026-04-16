@@ -12,8 +12,8 @@ DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
 
 @pytest.fixture(scope="module")
 def unified_db(tmp_path_factory):
-    from janitor.store import DocumentStore
-    from janitor.models import Document
+    from malm.store import DocumentStore
+    from malm.models import Document
 
     db_dir = tmp_path_factory.mktemp("webtest")
     db_path = db_dir / "unified.db"
@@ -77,7 +77,7 @@ def server(unified_db):
     env["JANITOR_DB_PATH"] = str(db_path)
 
     proc = subprocess.Popen(
-        ["uv", "run", "uvicorn", "janitor.web.app:app", "--host", "127.0.0.1", "--port", "8899"],
+        ["uv", "run", "uvicorn", "malm.web.app:app", "--host", "127.0.0.1", "--port", "8899"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env=env,
     )

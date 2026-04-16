@@ -1,6 +1,6 @@
 import pytest
 
-from janitor.pst_extract import (
+from malm.pst_extract import (
     _decode_mime_header,
     _decode_payload,
     _sanitize,

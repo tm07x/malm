@@ -1,0 +1,12 @@
+{
+  "last_session_id": "34bf0dbc-8ec0-4739-94cb-43d45dcf2dcb",
+  "last_event_key": "34bf0dbc-8ec0-4739-94cb-43d45dcf2dcb:transcript:7b7abf57c444cce66b47d3a0de7dacd82a5de1681dafd1cc9b6d12268f2c070b",
+  "last_prompted_session_id": "",
+  "last_prompted_at": "",
+  "last_reason": "short-session",
+  "last_user_message_count": 1,
+  "last_actionable_message_count": 1,
+  "deep_interview_lock_active": false,
+  "deep_interview_lock_source": "/Users/tm07x/Projects/scan-files/.omg/state/deep-interview.json",
+  "updated_at": "2026-04-16T01:00:22.676Z"
+}

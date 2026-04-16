@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from janitor.ingest.filesystem import FilesystemIngestor
-from janitor.store import DocumentStore
+from malm.ingest.filesystem import FilesystemIngestor
+from malm.store import DocumentStore
 
 
 @pytest.fixture

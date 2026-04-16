@@ -62,21 +62,21 @@ cd ~/Projects/scan-files
 
 # Extract ALL emails (takes time for 14k+ emails)
 uv run python -c "
-from janitor.pst_extract import extract_pst
+from malm.pst_extract import extract_pst
 result = extract_pst()
 print(result)
 "
 
 # Extract from a specific folder
 uv run python -c "
-from janitor.pst_extract import extract_pst
+from malm.pst_extract import extract_pst
 result = extract_pst(folder_filter='Revisjon, konkurs og tvist 2024')
 print(result)
 "
 
 # Extract with a limit (good for testing)
 uv run python -c "
-from janitor.pst_extract import extract_pst
+from malm.pst_extract import extract_pst
 result = extract_pst(folder_filter='Innboks', limit=20)
 print(result)
 "
@@ -91,7 +91,7 @@ cd ~/Projects/scan-files
 
 # Search extracted emails
 uv run python -c "
-from janitor.pst_extract import search_discovery
+from malm.pst_extract import search_discovery
 results = search_discovery('konkurs', folder='Revisjon, konkurs og tvist 2024')
 for r in results:
     print(f'{r[\"uuid\"]} | {r[\"date_iso\"][:10]} | {r[\"sender\"]} | {r[\"subject\"]}')
@@ -99,14 +99,14 @@ for r in results:
 
 # Get full email detail by UUID
 uv run python -c "
-from janitor.pst_extract import get_email_detail
+from malm.pst_extract import get_email_detail
 e = get_email_detail('UUID_HERE')
 print(e)
 "
 
 # Get stats
 uv run python -c "
-from janitor.pst_extract import get_discovery_stats
+from malm.pst_extract import get_discovery_stats
 print(get_discovery_stats())
 "
 ```

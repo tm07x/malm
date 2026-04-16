@@ -1,7 +1,7 @@
 import re
 import json
 import pytest
-from janitor.rules import load_rules, _validate_rules
+from malm.rules import load_rules, _validate_rules
 
 
 def test_missing_extension_rules():

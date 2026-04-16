@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from janitor.store import DocumentStore
-from janitor.models import Document
-from janitor.web.app import app, get_db
+from malm.store import DocumentStore
+from malm.models import Document
+from malm.web.app import app, get_db
 
 
 @pytest.fixture
@@ -182,7 +182,7 @@ class TestDocDetail:
 class TestAttachment:
     def test_serve_attachment(self, client, test_db):
         _, tmp_path = test_db
-        import janitor.web.app as web_app
+        import malm.web.app as web_app
         original_root = web_app.DISCOVERY_ROOT
         web_app.DISCOVERY_ROOT = tmp_path
         try:

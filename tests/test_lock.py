@@ -1,5 +1,5 @@
 import pytest
-from janitor.lock import acquire_lock, release_lock, LockError
+from malm.lock import acquire_lock, release_lock, LockError
 
 
 def test_acquire_and_release(tmp_path):

@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
 DB_PATH = DISCOVERY_ROOT / "discovery.db"
@@ -171,7 +171,7 @@ def thread_view(request: Request, thread_id: str, db: DocumentStore = Depends(ge
 
 @app.post("/api/export", response_class=HTMLResponse)
 def api_export(request: Request, uuids: str = ""):
-    from janitor.export import export_evidence_package
+    from malm.export import export_evidence_package
 
     uuid_list = [u.strip() for u in uuids.split(",") if u.strip()]
     if not uuid_list:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from janitor.extract import extract_text, parse_eml, sha256_file
+from malm.extract import extract_text, parse_eml, sha256_file
 
 
 # --- text.py tests ---

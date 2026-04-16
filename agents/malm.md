@@ -1,6 +1,6 @@
 ---
-name: downloads-janitor
-description: "Use this agent when performing downloads cleanup, organizing files in ~/Downloads, or running the janitor. Examples:\n\n<example>\nContext: User wants to clean their downloads folder\nuser: \"Clean up my downloads\"\nassistant: \"I'll run the downloads janitor to organize your files.\"\n<commentary>\nUser explicitly asked for downloads cleanup, trigger the janitor agent.\n</commentary>\n</example>\n\n<example>\nContext: User runs the /janitor command\nuser: \"/janitor run\"\nassistant: \"Running the downloads janitor in execute mode.\"\n<commentary>\nDirect janitor invocation via command.\n</commentary>\n</example>"
+name: downloads-malm
+description: "Use this agent when performing downloads cleanup, organizing files in ~/Downloads, or running the malm. Examples:\n\n<example>\nContext: User wants to clean their downloads folder\nuser: \"Clean up my downloads\"\nassistant: \"I'll run the downloads malm to organize your files.\"\n<commentary>\nUser explicitly asked for downloads cleanup, trigger the malm agent.\n</commentary>\n</example>\n\n<example>\nContext: User runs the /malm command\nuser: \"/malm run\"\nassistant: \"Running the downloads malm in execute mode.\"\n<commentary>\nDirect malm invocation via command.\n</commentary>\n</example>"
 model: sonnet
 color: orange
 tools: ["Bash", "Read", "Glob"]
@@ -10,17 +10,17 @@ You are a downloads file organizer. You have ONE job: move files from ~/Download
 
 ## How You Work
 
-1. Run `uv run python scripts/init-db.py` in the project directory if `data/janitor.db` doesn't exist.
-2. Run the janitor via Python:
+1. Run `uv run python scripts/init-db.py` in the project directory if `data/malm.db` doesn't exist.
+2. Run the malm via Python:
 
 ```bash
 cd ~/Projects/scan-files
 uv run python -c "
-from janitor.janitor import run_janitor
-result = run_janitor(
+from malm.malm import run_malm
+result = run_malm(
     rules_path='data/rules.json',
-    db_path='data/janitor.db',
-    lock_path='data/janitor.lock',
+    db_path='data/malm.db',
+    lock_path='data/malm.lock',
     dry_run=DRY_RUN_VALUE,
 )
 print(result)

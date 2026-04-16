@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def db():
-    from janitor.store import DocumentStore
+    from malm.store import DocumentStore
     d = DocumentStore(str(DB_PATH))
     yield d
     d.close()
@@ -211,7 +211,7 @@ class TestFTSConsistency:
 class TestExport:
     def test_csv_export_real_data(self, db, tmp_path):
         import csv as csv_mod
-        from janitor.export import export_csv
+        from malm.export import export_csv
         uuids = [r["uuid"] for r in db.search("konkurs", limit=5)]
         assert len(uuids) > 0
         out = export_csv(uuids, str(tmp_path / "test.csv"), db_path=str(DB_PATH))
@@ -222,7 +222,7 @@ class TestExport:
         assert "uuid" in rows[0]
 
     def test_evidence_package_real_data(self, db, tmp_path):
-        from janitor.export import export_evidence_package
+        from malm.export import export_evidence_package
         uuids = [r["uuid"] for r in db.search("Reinslakteriet", limit=3)]
         assert len(uuids) > 0
         zip_path = export_evidence_package(uuids, "test_pkg", output_dir=str(tmp_path), db_path=str(DB_PATH))
@@ -244,7 +244,7 @@ class TestWebUI:
     def server(self):
         import httpx
         proc = subprocess.Popen(
-            ["uv", "run", "uvicorn", "janitor.web.app:app", "--host", "127.0.0.1", "--port", "8877"],
+            ["uv", "run", "uvicorn", "malm.web.app:app", "--host", "127.0.0.1", "--port", "8877"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         # Poll for server readiness
@@ -335,7 +335,7 @@ class TestWebUI:
             assert isinstance(data["folders"], list)
 
     def test_attachment_serves(self, server):
-        from janitor.store import DocumentStore
+        from malm.store import DocumentStore
         unified = DISCOVERY_ROOT / "unified.db"
         db_path = str(unified) if unified.exists() else str(DB_PATH)
         store = DocumentStore(db_path)

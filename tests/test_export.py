@@ -5,9 +5,9 @@ import zipfile
 
 import pytest
 
-from janitor.models import Document
-from janitor.store import DocumentStore
-from janitor.export import export_csv, export_evidence_package, export_from_search
+from malm.models import Document
+from malm.store import DocumentStore
+from malm.export import export_csv, export_evidence_package, export_from_search
 
 
 @pytest.fixture

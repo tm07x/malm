@@ -23,7 +23,7 @@ cd ~/Projects/scan-files
 
 # Full-text search
 uv run python -c "
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 store = DocumentStore(os.path.expanduser('~/Documents/Legal-Discovery/unified.db'))
 for r in store.search('konkurs', limit=20):
     print(f'{r[\"uuid\"]} | {r[\"doc_type\"]} | {r.get(\"date_sent\",\"\")[:10]} | {r.get(\"title\",\"\")}')
@@ -33,7 +33,7 @@ store.close()
 # Filter by type, folder, sender, date
 uv run python -c "
 import os
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 store = DocumentStore(os.path.expanduser('~/Documents/Legal-Discovery/unified.db'))
 for r in store.search('faktura', doc_type='email', folder='Innboks', after='2024-01-01', before='2024-12-31'):
     print(f'{r[\"uuid\"]} | {r[\"date_sent\"][:10]} | {r[\"sender\"]} | {r[\"title\"]}')
@@ -43,7 +43,7 @@ store.close()
 # Get document by UUID
 uv run python -c "
 import os, json
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 store = DocumentStore(os.path.expanduser('~/Documents/Legal-Discovery/unified.db'))
 doc = store.get('UUID_HERE')
 print(json.dumps(doc, indent=2, default=str))
@@ -53,7 +53,7 @@ store.close()
 # Get children (attachments of an email)
 uv run python -c "
 import os
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 store = DocumentStore(os.path.expanduser('~/Documents/Legal-Discovery/unified.db'))
 for c in store.get_children('PARENT_UUID_HERE'):
     print(f'{c[\"uuid\"]} | {c[\"filename\"]} | {c[\"content_type\"]}')
@@ -63,7 +63,7 @@ store.close()
 # Stats
 uv run python -c "
 import os, json
-from janitor.store import DocumentStore
+from malm.store import DocumentStore
 store = DocumentStore(os.path.expanduser('~/Documents/Legal-Discovery/unified.db'))
 print(json.dumps(store.stats(), indent=2))
 store.close()
@@ -76,7 +76,7 @@ The web UI at `http://localhost:8899` provides search, folder browsing, email de
 
 ```bash
 cd ~/Projects/scan-files
-uv run uvicorn janitor.web.app:app --reload --port 8899
+uv run uvicorn malm.web.app:app --reload --port 8899
 ```
 
 ## How to Read Full Content
