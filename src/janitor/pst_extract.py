@@ -10,7 +10,8 @@ from email.header import decode_header as _decode_header
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-from janitor.discovery_db import DiscoveryDB
+from janitor.models import Document
+from janitor.store import DocumentStore
 
 PST_FILE = os.environ.get(
     "DISCOVERY_PST_PATH",
@@ -216,8 +217,8 @@ def extract_pst(
     pst_path: str = PST_FILE,
 ) -> dict:
     _ensure_dirs()
-    db = DiscoveryDB(str(DB_PATH))
-    run_id = db.start_run(pst_path, folder_filter)
+    store = DocumentStore(str(DB_PATH))
+    run_id = store.start_run("pst", pst_path)
 
     email_count = 0
     att_count = 0
@@ -232,8 +233,6 @@ def extract_pst(
             if limit and email_count >= limit:
                 break
 
-            # Determine PST folder from directory structure
-            # readpst nests under "Outlook Data File/<folder>" — strip the prefix
             rel = eml_path.relative_to(cache_dir)
             raw_folder = str(rel.parent)
             pst_folder = re.sub(r'^Outlook Data File/?', '', raw_folder) or "Root"
@@ -247,11 +246,9 @@ def extract_pst(
                 safe_subj = _sanitize(parsed["subject"], 60)
                 email_stem = f"{eid}_{safe_subj}"
 
-                # Copy source .eml
                 src_dest = SOURCE_DIR / f"{email_stem}.eml"
                 shutil.copy2(str(eml_path), str(src_dest))
 
-                # Prepare attachment records (write files but defer DB inserts)
                 att_records = []
                 for att in parsed["attachments"]:
                     aid = uuid.uuid4().hex[:12]
@@ -272,41 +269,51 @@ def extract_pst(
                         "extracted_at": _now(),
                     })
 
-                # Write markdown
                 md_content = _email_to_markdown(parsed, eid, att_records)
                 md_dest = MD_DIR / f"{email_stem}.md"
                 md_dest.write_text(md_content, encoding="utf-8")
 
-                # Insert email + attachments in a single transaction
                 try:
-                    db.insert_email(
-                        commit=False,
+                    now = _now()
+                    doc = Document(
                         uuid=eid,
-                        pst_folder=pst_folder,
-                        subject=parsed["subject"],
+                        doc_type="email",
+                        source="pst",
+                        created_at=now,
+                        source_path=str(src_dest),
+                        markdown_path=str(md_dest),
+                        filename=eml_path.name,
+                        title=parsed["subject"],
+                        body_text=parsed["body"],
+                        body_preview=parsed["body_preview"],
                         sender=parsed["sender"],
                         recipients=parsed["to"],
                         cc=parsed["cc"],
-                        date=parsed["date_raw"],
-                        date_iso=parsed["date_iso"],
-                        has_attachments=1 if parsed["attachments"] else 0,
-                        attachment_names=", ".join(a["filename"] for a in parsed["attachments"]) or None,
-                        source_path=str(src_dest),
-                        markdown_path=str(md_dest),
-                        original_filename=eml_path.name,
-                        body_preview=parsed["body_preview"],
-                        body_text=parsed["body"],
+                        date_sent=parsed["date_iso"],
                         message_id=parsed["message_id"],
                         in_reply_to=parsed["in_reply_to"],
                         references_header=parsed["references_header"],
                         thread_id=parsed["thread_id"],
-                        extracted_at=_now(),
+                        folder=pst_folder,
                     )
+                    store.insert(doc, commit=False)
                     for att_rec in att_records:
-                        db.insert_attachment(commit=False, **att_rec)
-                    db.conn.commit()
+                        att_doc = Document(
+                            uuid=att_rec["uuid"],
+                            doc_type="attachment",
+                            source="pst",
+                            created_at=att_rec["extracted_at"],
+                            parent_uuid=eid,
+                            source_path=att_rec["source_path"],
+                            markdown_path=att_rec["markdown_path"],
+                            filename=att_rec["original_filename"],
+                            size_bytes=att_rec["size_bytes"],
+                            content_type=att_rec["content_type"],
+                        )
+                        store.insert(att_doc, commit=False)
+                    store.conn.commit()
                 except Exception:
-                    db.conn.rollback()
+                    store.conn.rollback()
                     raise
                 email_count += 1
                 att_count += len(att_records)
@@ -326,8 +333,8 @@ def extract_pst(
     else:
         run_status = "partial" if error_count > 0 else "done"
     finally:
-        db.finish_run(run_id, email_count, att_count, error_count, status=run_status)
-        db.close()
+        store.finish_run(run_id, docs=email_count + att_count, errors=error_count, status=run_status)
+        store.close()
 
     return {
         "emails_extracted": email_count,
@@ -341,27 +348,25 @@ def extract_pst(
 
 def search_discovery(query: str = "", folder: str | None = None, sender: str | None = None,
                      after: str | None = None, before: str | None = None, limit: int = 50) -> list[dict]:
-    db = DiscoveryDB(str(DB_PATH))
-    results = db.search(query, folder, sender, after, before, limit)
-    db.close()
+    store = DocumentStore(str(DB_PATH))
+    results = store.search(query, folder=folder, sender=sender, after=after, before=before, limit=limit)
+    store.close()
     return results
 
 
 def get_email_detail(email_uuid: str) -> dict | None:
-    db = DiscoveryDB(str(DB_PATH))
-    email_rec = db.get_email(email_uuid)
-    if email_rec:
-        email_rec["attachments"] = db.get_attachments(email_uuid)
-    db.close()
-    return email_rec
+    store = DocumentStore(str(DB_PATH))
+    doc = store.get(email_uuid)
+    if doc:
+        doc["attachments"] = store.get_children(email_uuid)
+    store.close()
+    return doc
 
 
 def get_discovery_stats() -> dict:
-    db = DiscoveryDB(str(DB_PATH))
-    stats = db.get_stats()
-    folder_counts = db.folder_counts()
-    stats["folder_counts"] = folder_counts
-    db.close()
+    store = DocumentStore(str(DB_PATH))
+    stats = store.stats()
+    store.close()
     return stats
 
 

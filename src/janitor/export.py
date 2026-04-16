@@ -7,13 +7,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from janitor.discovery_db import DiscoveryDB
-
-try:
-    from janitor.store import DocumentStore
-    HAS_UNIFIED = True
-except ImportError:
-    HAS_UNIFIED = False
+from janitor.store import DocumentStore
 
 DEFAULT_DB = os.path.expanduser("~/Documents/Legal-Discovery/discovery.db")
 DEFAULT_EXPORT_DIR = os.path.expanduser("~/Documents/Legal-Discovery/exports")
@@ -30,49 +24,31 @@ def _sha256(path: str) -> str:
         return ""
 
 
-def _build_rows(db, email_uuids: list[str]) -> list[dict]:
+def _build_rows(store: DocumentStore, email_uuids: list[str]) -> list[dict]:
     rows = []
-    use_store = HAS_UNIFIED and isinstance(db, DocumentStore)
     for uid in email_uuids:
-        if use_store:
-            email = db.get(uid)
-        else:
-            email = db.get_email(uid)
+        email = store.get(uid)
         if not email:
             continue
-        if use_store:
-            atts = db.get_children(uid)
-            rows.append({
-                "uuid": email["uuid"],
-                "date": email.get("date_sent"),
-                "sender": email.get("sender"),
-                "recipients": email.get("recipients"),
-                "subject": email.get("title"),
-                "folder": email.get("folder"),
-                "attachment_count": len(atts),
-                "source_path": email.get("source_path"),
-                "markdown_path": email.get("markdown_path"),
-            })
-        else:
-            atts = db.get_attachments(uid)
-            rows.append({
-                "uuid": email["uuid"],
-                "date": email["date"],
-                "sender": email["sender"],
-                "recipients": email["recipients"],
-                "subject": email["subject"],
-                "folder": email["pst_folder"],
-                "attachment_count": len(atts),
-                "source_path": email["source_path"],
-                "markdown_path": email["markdown_path"],
-            })
+        atts = store.get_children(uid)
+        rows.append({
+            "uuid": email["uuid"],
+            "date": email.get("date_sent"),
+            "sender": email.get("sender"),
+            "recipients": email.get("recipients"),
+            "subject": email.get("title"),
+            "folder": email.get("folder"),
+            "attachment_count": len(atts),
+            "source_path": email.get("source_path"),
+            "markdown_path": email.get("markdown_path"),
+        })
     return rows
 
 
 def export_csv(email_uuids: list[str], output_path: str, db_path: str = DEFAULT_DB) -> str:
-    db = DiscoveryDB(db_path)
+    store = DocumentStore(db_path)
     try:
-        rows = _build_rows(db, email_uuids)
+        rows = _build_rows(store, email_uuids)
         fieldnames = ["uuid", "date", "sender", "recipients", "subject", "folder",
                        "attachment_count", "source_path", "markdown_path"]
         with open(output_path, "w", newline="") as f:
@@ -81,12 +57,12 @@ def export_csv(email_uuids: list[str], output_path: str, db_path: str = DEFAULT_
             writer.writerows(rows)
         return output_path
     finally:
-        db.close()
+        store.close()
 
 
 def export_evidence_package(email_uuids: list[str], package_name: str,
                             output_dir: str | None = None, db_path: str = DEFAULT_DB) -> str:
-    db = DiscoveryDB(db_path)
+    store = DocumentStore(db_path)
     try:
         if output_dir is None:
             output_dir = DEFAULT_EXPORT_DIR
@@ -98,38 +74,41 @@ def export_evidence_package(email_uuids: list[str], package_name: str,
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for uid in email_uuids:
-                email = db.get_email(uid)
-                if not email:
+                doc = store.get(uid)
+                if not doc:
                     continue
-                atts = db.get_attachments(uid)
+                children = store.get_children(uid)
 
-                source_hash = _sha256(email["source_path"])
+                source_path = doc.get("source_path") or ""
+                source_hash = _sha256(source_path)
                 row = {
-                    "uuid": email["uuid"],
-                    "date": email["date"],
-                    "sender": email["sender"],
-                    "recipients": email["recipients"],
-                    "subject": email["subject"],
-                    "folder": email["pst_folder"],
-                    "attachment_count": len(atts),
-                    "source_path": email["source_path"],
-                    "markdown_path": email["markdown_path"],
+                    "uuid": doc["uuid"],
+                    "date": doc.get("date_sent"),
+                    "sender": doc.get("sender"),
+                    "recipients": doc.get("recipients"),
+                    "subject": doc.get("title"),
+                    "folder": doc.get("folder"),
+                    "attachment_count": len(children),
+                    "source_path": source_path,
+                    "markdown_path": doc.get("markdown_path"),
                     "sha256": source_hash,
                 }
                 manifest_rows.append(row)
-                manifest_json.append({**dict(email), "attachments": atts, "sha256": source_hash})
+                manifest_json.append({**doc, "attachments": [dict(c) for c in children], "sha256": source_hash})
 
-                if os.path.isfile(email["source_path"]):
-                    ext = Path(email["source_path"]).suffix or ".eml"
-                    zf.write(email["source_path"], f"emails/{uid}{ext}")
+                if source_path and os.path.isfile(source_path):
+                    ext = Path(source_path).suffix or ".eml"
+                    zf.write(source_path, f"emails/{uid}{ext}")
 
-                if email["markdown_path"] and os.path.isfile(email["markdown_path"]):
-                    zf.write(email["markdown_path"], f"markdown/{uid}.md")
+                md_path = doc.get("markdown_path") or ""
+                if md_path and os.path.isfile(md_path):
+                    zf.write(md_path, f"markdown/{uid}.md")
 
-                for att in atts:
-                    if os.path.isfile(att["source_path"]):
-                        zf.write(att["source_path"],
-                                 f"attachments/{uid}/{att['original_filename']}")
+                for child in children:
+                    cp = child.get("source_path") or ""
+                    if cp and os.path.isfile(cp):
+                        zf.write(cp,
+                                 f"attachments/{uid}/{child.get('filename', 'unknown')}")
 
             fieldnames = ["uuid", "date", "sender", "recipients", "subject", "folder",
                           "attachment_count", "source_path", "markdown_path", "sha256"]
@@ -143,19 +122,19 @@ def export_evidence_package(email_uuids: list[str], package_name: str,
 
         return zip_path
     finally:
-        db.close()
+        store.close()
 
 
 def export_from_search(query: str, folder: str | None = None, sender: str | None = None,
                        after: str | None = None, before: str | None = None,
                        package_name: str | None = None, output_dir: str | None = None,
                        db_path: str = DEFAULT_DB) -> str:
-    db = DiscoveryDB(db_path)
+    store = DocumentStore(db_path)
     try:
-        results = db.search(query, folder=folder, sender=sender, after=after, before=before)
+        results = store.search(query, folder=folder, sender=sender, after=after, before=before)
         uuids = [r["uuid"] for r in results]
     finally:
-        db.close()
+        store.close()
 
     if not package_name:
         package_name = f"search-{query[:30].replace(' ', '_')}"

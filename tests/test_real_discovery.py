@@ -11,20 +11,20 @@ from pathlib import Path
 import pytest
 
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
-DB_PATH = DISCOVERY_ROOT / "discovery.db"
+DB_PATH = DISCOVERY_ROOT / "unified.db"
 SOURCE_DIR = DISCOVERY_ROOT / "source-doc"
 MD_DIR = DISCOVERY_ROOT / "MD"
 
 pytestmark = pytest.mark.skipif(
     not DB_PATH.exists(),
-    reason="Discovery DB not found — skip real-world tests",
+    reason="Unified DB not found — skip real-world tests",
 )
 
 
 @pytest.fixture(scope="module")
 def db():
-    from janitor.discovery_db import DiscoveryDB
-    d = DiscoveryDB(str(DB_PATH))
+    from janitor.store import DocumentStore
+    d = DocumentStore(str(DB_PATH))
     yield d
     d.close()
 
@@ -33,42 +33,42 @@ def db():
 
 class TestDataIntegrity:
     def test_email_count_is_reasonable(self, db):
-        count = db.email_count()
+        count = db.conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'email'").fetchone()[0]
         assert count > 10_000, f"Expected 14k+ emails, got {count}"
 
     def test_every_email_has_source_file(self, db):
-        rows = db.conn.execute("SELECT uuid, source_path FROM emails LIMIT 200").fetchall()
-        missing = [row["uuid"] for row in rows if not Path(row["source_path"]).exists()]
+        rows = db.conn.execute("SELECT uuid, source_path FROM documents WHERE doc_type = 'email' LIMIT 200").fetchall()
+        missing = [row["uuid"] for row in rows if row["source_path"] and not Path(row["source_path"]).exists()]
         assert len(missing) == 0, f"{len(missing)} emails missing source files: {missing[:5]}"
 
     def test_every_email_has_markdown_file(self, db):
-        rows = db.conn.execute("SELECT uuid, markdown_path FROM emails LIMIT 200").fetchall()
-        missing = [row["uuid"] for row in rows if not Path(row["markdown_path"]).exists()]
+        rows = db.conn.execute("SELECT uuid, markdown_path FROM documents WHERE doc_type = 'email' LIMIT 200").fetchall()
+        missing = [row["uuid"] for row in rows if row["markdown_path"] and not Path(row["markdown_path"]).exists()]
         assert len(missing) == 0, f"{len(missing)} emails missing markdown: {missing[:5]}"
 
     def test_attachment_files_exist(self, db):
-        rows = db.conn.execute("SELECT uuid, source_path FROM attachments LIMIT 200").fetchall()
-        missing = [row["uuid"] for row in rows if not Path(row["source_path"]).exists()]
+        rows = db.conn.execute("SELECT uuid, source_path FROM documents WHERE doc_type = 'attachment' LIMIT 200").fetchall()
+        missing = [row["uuid"] for row in rows if row["source_path"] and not Path(row["source_path"]).exists()]
         assert len(missing) == 0, f"{len(missing)} attachments missing files: {missing[:5]}"
 
     def test_no_orphan_attachments(self, db):
         orphans = db.conn.execute("""
-            SELECT a.uuid FROM attachments a
-            LEFT JOIN emails e ON a.email_uuid = e.uuid
-            WHERE e.uuid IS NULL
+            SELECT a.uuid FROM documents a
+            LEFT JOIN documents e ON a.parent_uuid = e.uuid
+            WHERE a.doc_type = 'attachment' AND a.parent_uuid IS NOT NULL AND e.uuid IS NULL
         """).fetchall()
         assert len(orphans) == 0, f"{len(orphans)} orphan attachments found"
 
     def test_all_emails_have_uuid(self, db):
-        bad = db.conn.execute("SELECT COUNT(*) FROM emails WHERE uuid IS NULL OR uuid = ''").fetchone()[0]
+        bad = db.conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'email' AND (uuid IS NULL OR uuid = '')").fetchone()[0]
         assert bad == 0
 
     def test_all_emails_have_subject(self, db):
-        no_subj = db.conn.execute("SELECT COUNT(*) FROM emails WHERE subject IS NULL").fetchone()[0]
+        no_subj = db.conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'email' AND title IS NULL").fetchone()[0]
         assert no_subj == 0
 
     def test_all_emails_have_folder(self, db):
-        no_folder = db.conn.execute("SELECT COUNT(*) FROM emails WHERE pst_folder IS NULL OR pst_folder = ''").fetchone()[0]
+        no_folder = db.conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'email' AND (folder IS NULL OR folder = '')").fetchone()[0]
         assert no_folder == 0
 
 
@@ -78,32 +78,30 @@ class TestEncoding:
     def test_norwegian_chars_in_subjects(self, db):
         """Subjects should contain Norwegian characters, not mojibake."""
         rows = db.conn.execute(
-            "SELECT subject FROM emails WHERE subject LIKE '%ø%' OR subject LIKE '%å%' OR subject LIKE '%æ%' LIMIT 5"
+            "SELECT title FROM documents WHERE doc_type = 'email' AND (title LIKE '%ø%' OR title LIKE '%å%' OR title LIKE '%æ%') LIMIT 5"
         ).fetchall()
         assert len(rows) > 0, "No Norwegian chars found in subjects"
         for row in rows:
-            assert "�" not in row["subject"], f"Mojibake in subject: {row['subject'][:60]}"
+            assert "\ufffd" not in row["title"], f"Mojibake in title: {row['title'][:60]}"
 
     def test_norwegian_chars_in_body(self, db):
         rows = db.conn.execute(
-            "SELECT uuid, body_text FROM emails WHERE body_text LIKE '%ø%' LIMIT 5"
+            "SELECT uuid, body_text FROM documents WHERE doc_type = 'email' AND body_text LIKE '%ø%' LIMIT 5"
         ).fetchall()
         assert len(rows) > 0, "No Norwegian ø found in body text"
 
     def test_sami_name_preserved(self, db):
         rows = db.conn.execute(
-            "SELECT sender FROM emails WHERE sender LIKE '%Lásse%' LIMIT 1"
+            "SELECT sender FROM documents WHERE doc_type = 'email' AND sender LIKE '%Lásse%' LIMIT 1"
         ).fetchall()
         assert len(rows) > 0, "Sami name 'Lásse' not found in sender"
 
     def test_no_mojibake_in_body_sample(self, db):
         """Sample body texts should not contain replacement char U+FFFD."""
         rows = db.conn.execute(
-            "SELECT uuid, body_text FROM emails WHERE body_text IS NOT NULL AND length(body_text) > 100 LIMIT 50"
+            "SELECT uuid, body_text FROM documents WHERE doc_type = 'email' AND body_text IS NOT NULL AND length(body_text) > 100 LIMIT 50"
         ).fetchall()
         bad = [r["uuid"] for r in rows if "\ufffd" in (r["body_text"] or "")]
-        # Some replacement chars are acceptable for truly broken encodings,
-        # but it shouldn't be more than 10% of the sample
         assert len(bad) < len(rows) * 0.1, f"{len(bad)}/{len(rows)} emails have U+FFFD in body"
 
 
@@ -122,7 +120,7 @@ class TestSearch:
     def test_folder_filter(self, db):
         results = db.search("", folder="Innboks")
         assert len(results) > 0
-        assert all(r["pst_folder"] == "Innboks" for r in results)
+        assert all(r["folder"] == "Innboks" for r in results)
 
     def test_sender_filter(self, db):
         results = db.search("", sender="noreply")
@@ -133,8 +131,8 @@ class TestSearch:
         results = db.search("", after="2024-10-01", before="2024-10-31")
         assert len(results) > 0
         for r in results:
-            assert r["date_iso"] >= "2024-10-01"
-            assert r["date_iso"] <= "2024-10-31"
+            assert r["date_sent"] >= "2024-10-01"
+            assert r["date_sent"] <= "2024-10-31"
 
     def test_combined_filters(self, db):
         results = db.search("faktura", folder="Innboks", after="2024-01-01")
@@ -154,15 +152,15 @@ class TestSearch:
 class TestThreading:
     def test_thread_ids_populated(self, db):
         count = db.conn.execute(
-            "SELECT COUNT(*) FROM emails WHERE thread_id IS NOT NULL AND thread_id != ''"
+            "SELECT COUNT(*) FROM documents WHERE doc_type = 'email' AND thread_id IS NOT NULL AND thread_id != ''"
         ).fetchone()[0]
-        total = db.email_count()
+        total = db.conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'email'").fetchone()[0]
         assert count > total * 0.5, f"Only {count}/{total} emails have thread_id"
 
     def test_multi_email_threads_exist(self, db):
         threads = db.conn.execute("""
-            SELECT thread_id, COUNT(*) as c FROM emails
-            WHERE thread_id IS NOT NULL AND thread_id != ''
+            SELECT thread_id, COUNT(*) as c FROM documents
+            WHERE doc_type = 'email' AND thread_id IS NOT NULL AND thread_id != ''
             GROUP BY thread_id HAVING c > 2
             ORDER BY c DESC LIMIT 5
         """).fetchall()
@@ -171,20 +169,20 @@ class TestThreading:
 
     def test_get_thread_returns_ordered(self, db):
         tid = db.conn.execute("""
-            SELECT thread_id FROM emails
-            WHERE thread_id IS NOT NULL AND thread_id != ''
+            SELECT thread_id FROM documents
+            WHERE doc_type = 'email' AND thread_id IS NOT NULL AND thread_id != ''
             GROUP BY thread_id HAVING COUNT(*) > 3
             LIMIT 1
         """).fetchone()
         if tid:
             emails = db.get_thread(tid[0])
             assert len(emails) > 3
-            dates = [e["date_iso"] for e in emails if e["date_iso"]]
+            dates = [e["date_sent"] for e in emails if e["date_sent"]]
             assert dates == sorted(dates), "Thread emails not ordered by date"
 
     def test_message_ids_populated(self, db):
         count = db.conn.execute(
-            "SELECT COUNT(*) FROM emails WHERE message_id IS NOT NULL AND message_id != ''"
+            "SELECT COUNT(*) FROM documents WHERE doc_type = 'email' AND message_id IS NOT NULL AND message_id != ''"
         ).fetchone()[0]
         assert count > 0, "No message_ids found"
 
@@ -192,10 +190,10 @@ class TestThreading:
 # ── FTS index consistency ───────────────────────────────────────
 
 class TestFTSConsistency:
-    def test_fts_row_count_matches_emails(self, db):
-        email_count = db.email_count()
-        fts_count = db.conn.execute("SELECT COUNT(*) FROM emails_fts").fetchone()[0]
-        assert fts_count == email_count, f"FTS has {fts_count} rows, emails has {email_count}"
+    def test_fts_row_count_matches_documents(self, db):
+        doc_count = db.conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        fts_count = db.conn.execute("SELECT COUNT(*) FROM documents_fts").fetchone()[0]
+        assert fts_count == doc_count, f"FTS has {fts_count} rows, documents has {doc_count}"
 
     def test_fts_finds_known_sender(self, db):
         results = db.search_fts("Gjensidige")
@@ -227,7 +225,7 @@ class TestExport:
         from janitor.export import export_evidence_package
         uuids = [r["uuid"] for r in db.search("Reinslakteriet", limit=3)]
         assert len(uuids) > 0
-        zip_path = export_evidence_package(uuids, "test_pkg", output_dir=str(tmp_path))
+        zip_path = export_evidence_package(uuids, "test_pkg", output_dir=str(tmp_path), db_path=str(DB_PATH))
         assert Path(zip_path).exists()
         assert Path(zip_path).stat().st_size > 1000
 
