@@ -1,32 +1,53 @@
 """Real-world integration tests against the live discovery database.
 
 These tests verify the full pipeline works with actual extracted PST data.
-Skip if discovery DB doesn't exist (CI environments).
+Skip when a full real corpus is not available (CI/cloud environments).
 """
+import csv
 import subprocess
-import json
 import time
+import zipfile
 from pathlib import Path
 
+import httpx
 import pytest
+from malm.export import export_csv, export_evidence_package
+from malm.store import DocumentStore
 
 DISCOVERY_ROOT = Path.home() / "Documents" / "Legal-Discovery"
 DB_PATH = DISCOVERY_ROOT / "unified.db"
 SOURCE_DIR = DISCOVERY_ROOT / "source-doc"
 MD_DIR = DISCOVERY_ROOT / "MD"
+MIN_EXPECTED_EMAILS = 10_000
+
+
+def _has_real_corpus() -> bool:
+    if not DB_PATH.exists():
+        return False
+    if not SOURCE_DIR.exists() or not MD_DIR.exists():
+        return False
+    try:
+        store = DocumentStore(str(DB_PATH))
+        stats = store.stats()
+        store.close()
+    except Exception:
+        return False
+    email_count = stats["by_type"].get("email", 0)
+    attachment_count = stats["by_type"].get("attachment", 0)
+    return email_count >= MIN_EXPECTED_EMAILS and attachment_count > 0
+
 
 pytestmark = pytest.mark.skipif(
-    not DB_PATH.exists(),
-    reason="Unified DB not found — skip real-world tests",
+    not _has_real_corpus(),
+    reason="Real corpus unavailable (need populated unified.db with >=10k emails + attachments).",
 )
 
 
 @pytest.fixture(scope="module")
 def db():
-    from malm.store import DocumentStore
-    d = DocumentStore(str(DB_PATH))
-    yield d
-    d.close()
+    store = DocumentStore(str(DB_PATH))
+    yield store
+    store.close()
 
 
 # ── Data integrity ──────────────────────────────────────────────
@@ -210,26 +231,22 @@ class TestFTSConsistency:
 
 class TestExport:
     def test_csv_export_real_data(self, db, tmp_path):
-        import csv as csv_mod
-        from malm.export import export_csv
         uuids = [r["uuid"] for r in db.search("konkurs", limit=5)]
         assert len(uuids) > 0
         out = export_csv(uuids, str(tmp_path / "test.csv"), db_path=str(DB_PATH))
         with open(out) as f:
-            reader = csv_mod.DictReader(f)
+            reader = csv.DictReader(f)
             rows = list(reader)
         assert len(rows) == len(uuids), f"Expected {len(uuids)} data rows, got {len(rows)}"
         assert "uuid" in rows[0]
 
     def test_evidence_package_real_data(self, db, tmp_path):
-        from malm.export import export_evidence_package
         uuids = [r["uuid"] for r in db.search("Reinslakteriet", limit=3)]
         assert len(uuids) > 0
         zip_path = export_evidence_package(uuids, "test_pkg", output_dir=str(tmp_path), db_path=str(DB_PATH))
         assert Path(zip_path).exists()
         assert Path(zip_path).stat().st_size > 1000
 
-        import zipfile
         with zipfile.ZipFile(zip_path) as zf:
             names = zf.namelist()
             assert any("manifest.csv" in n for n in names)
@@ -242,7 +259,6 @@ class TestExport:
 class TestWebUI:
     @pytest.fixture(autouse=True, scope="class")
     def server(self):
-        import httpx
         proc = subprocess.Popen(
             ["uv", "run", "uvicorn", "malm.web.app:app", "--host", "127.0.0.1", "--port", "8877"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -268,7 +284,6 @@ class TestWebUI:
         proc.wait(timeout=5)
 
     def _get(self, path):
-        import httpx
         return httpx.get(f"http://127.0.0.1:8877{path}", timeout=10)
 
     def test_dashboard_loads(self, server):
@@ -335,7 +350,6 @@ class TestWebUI:
             assert isinstance(data["folders"], list)
 
     def test_attachment_serves(self, server):
-        from malm.store import DocumentStore
         unified = DISCOVERY_ROOT / "unified.db"
         db_path = str(unified) if unified.exists() else str(DB_PATH)
         store = DocumentStore(db_path)
@@ -349,7 +363,6 @@ class TestWebUI:
         assert r.status_code == 200
 
     def test_htmx_partial(self, server):
-        import httpx
         stats = self._get("/api/stats")
         if stats.json()["total"] == 0:
             pytest.skip("No documents in new schema — DB not yet migrated")
