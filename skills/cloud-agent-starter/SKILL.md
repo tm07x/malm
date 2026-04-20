@@ -9,7 +9,7 @@ description: Use when starting work in this repository and needing immediate Clo
 
 - No app login is required for core local workflows.
 - Install deps once: `uv sync`
-- Initialize local janitor data once: `uv run python scripts/init-db.py`
+- Initialize local runtime paths + unified store once: `uv run python scripts/init-db.py`
 - Optional external auth only for semantic embeddings:
   - `export VOYAGE_API_KEY=...`
   - If unset, use FTS/non-semantic flows (tests still work).
