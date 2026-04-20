@@ -223,6 +223,7 @@ def extract_pst(
     email_count = 0
     att_count = 0
     error_count = 0
+    skipped_duplicates = 0
     run_status = "error"
 
     try:
@@ -242,6 +243,17 @@ def extract_pst(
 
             try:
                 parsed = _parse_eml(eml_path)
+                candidate = Document(
+                    uuid=f"candidate-{uuid.uuid4().hex}",
+                    doc_type="email",
+                    source="pst",
+                    created_at=_now(),
+                    message_id=parsed["message_id"] or None,
+                )
+                if store.find_duplicate(candidate):
+                    skipped_duplicates += 1
+                    continue
+
                 eid = uuid.uuid4().hex[:12]
                 safe_subj = _sanitize(parsed["subject"], 60)
                 email_stem = f"{eid}_{safe_subj}"
@@ -340,6 +352,7 @@ def extract_pst(
         "emails_extracted": email_count,
         "attachments_extracted": att_count,
         "errors": error_count,
+        "skipped_duplicates": skipped_duplicates,
         "source_dir": str(SOURCE_DIR),
         "markdown_dir": str(MD_DIR),
         "db_path": str(DB_PATH),

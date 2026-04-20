@@ -1,4 +1,4 @@
-import tempfile
+import hashlib
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -14,13 +14,14 @@ def _make_eml(
     subject="Test Subject",
     body="Hello, this is the body.",
     attachments=None,
+    message_id="<test-msg-001@example.com>",
 ) -> bytes:
     msg = EmailMessage()
     msg["To"] = to
     msg["From"] = sender
     msg["Subject"] = subject
     msg["Date"] = "Mon, 01 Jan 2024 10:00:00 +0000"
-    msg["Message-ID"] = "<test-msg-001@example.com>"
+    msg["Message-ID"] = message_id
     msg.set_content(body)
 
     for att in (attachments or []):
@@ -111,7 +112,11 @@ class TestPstIngestorBasic:
         eml_dir.mkdir()
         for i in range(3):
             (eml_dir / f"mail{i}.eml").write_bytes(
-                _make_eml(subject=f"Email number {i}", sender=f"user{i}@test.com")
+                _make_eml(
+                    subject=f"Email number {i}",
+                    sender=f"user{i}@test.com",
+                    message_id=f"<msg-{i}@example.com>",
+                )
             )
 
         result = workspace["ingestor"].ingest_eml_dir(eml_dir)
@@ -158,6 +163,57 @@ class TestPstIngestorBasic:
 
         eml_copies = list(workspace["source_dir"].glob("*.eml"))
         assert len(eml_copies) == 1
+
+    def test_ingest_eml_dir_is_idempotent_by_message_id(self, workspace):
+        eml_dir = workspace["tmp_path"] / "emls"
+        eml_dir.mkdir()
+        (eml_dir / "mail.eml").write_bytes(
+            _make_eml(subject="Idempotent", message_id="<idempotent@example.com>")
+        )
+
+        first = workspace["ingestor"].ingest_eml_dir(eml_dir, pst_folder="Inbox")
+        second = workspace["ingestor"].ingest_eml_dir(eml_dir, pst_folder="Inbox")
+
+        assert first["docs_processed"] == 1
+        assert first["skipped"] == 0
+        assert second["docs_processed"] == 0
+        assert second["skipped"] == 1
+
+        docs = workspace["store"].search(doc_type="email")
+        assert len(docs) == 1
+
+    def test_ingest_pst_processes_each_cached_eml_once(self, workspace):
+        pst_path = workspace["tmp_path"] / "mailbox.pst"
+        pst_path.write_bytes(b"fake pst")
+        abs_pst = str(pst_path.resolve())
+
+        pst_hash = hashlib.sha256(abs_pst.encode()).hexdigest()[:12]
+        cache_dir = workspace["source_dir"].parent / ".eml-cache" / pst_hash
+        inbox_dir = cache_dir / "Outlook Data File" / "Innboks"
+        sent_dir = cache_dir / "Outlook Data File" / "Sendte elementer"
+        inbox_dir.mkdir(parents=True)
+        sent_dir.mkdir(parents=True)
+
+        (cache_dir / ".extraction-complete").write_text("ok")
+
+        (inbox_dir / "a.eml").write_bytes(
+            _make_eml(subject="A", message_id="<a@example.com>")
+        )
+        (inbox_dir / "b.eml").write_bytes(
+            _make_eml(subject="B", message_id="<b@example.com>")
+        )
+        (sent_dir / "c.eml").write_bytes(
+            _make_eml(subject="C", message_id="<c@example.com>")
+        )
+
+        result = workspace["ingestor"].ingest_pst(str(pst_path))
+
+        assert result["docs_processed"] == 3
+        assert result["errors"] == 0
+        assert result["skipped"] == 0
+
+        docs = workspace["store"].search(doc_type="email", limit=10)
+        assert len(docs) == 3
 
 
 class TestSanitize:

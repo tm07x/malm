@@ -1,5 +1,6 @@
 import shutil
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,7 +41,18 @@ class FilesystemIngestor:
                 errors += 1
                 continue
 
-            if self.store.find_by_sha256(file_hash):
+            candidate_doc = Document(
+                uuid=str(uuid.uuid4()),
+                doc_type="file",
+                source="filesystem",
+                created_at=_now(),
+                source_path=str(entry),
+                sha256=file_hash,
+                filename=entry.name,
+                extension=entry.suffix.lower() if entry.suffix else None,
+                size_bytes=entry.stat().st_size,
+            )
+            if self.store.find_duplicate(candidate_doc):
                 skipped += 1
                 continue
 
@@ -57,19 +69,8 @@ class FilesystemIngestor:
             except Exception:
                 pass
 
-            ext = entry.suffix.lower() if entry.suffix else None
-            stat = entry.stat()
-
-            doc = Document(
-                uuid=str(uuid.uuid4()),
-                doc_type="file",
-                source="filesystem",
-                created_at=_now(),
-                source_path=str(entry),
-                sha256=file_hash,
-                filename=entry.name,
-                extension=ext,
-                size_bytes=stat.st_size,
+            doc = replace(
+                candidate_doc,
                 folder=dest_dir,
                 rule_matched=rule_id,
                 body_text=body_text,

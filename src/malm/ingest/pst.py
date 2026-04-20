@@ -83,28 +83,32 @@ class PstIngestor:
             subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
             marker.write_text(_now())
 
-        total_docs = 0
-        total_errors = 0
+        docs_processed = 0
+        errors = 0
+        skipped = 0
 
         eml_files = sorted(cache_dir.rglob("*.eml"))
-        processed = 0
         for eml_path in eml_files:
-            if limit and processed >= limit:
+            if limit and docs_processed >= limit:
                 break
 
             rel = eml_path.relative_to(cache_dir)
             raw_folder = str(rel.parent)
-            pst_folder = re.sub(r'^Outlook Data File/?', '', raw_folder) or "Root"
+            pst_folder = re.sub(r"^Outlook Data File/?", "", raw_folder) or "Root"
 
             if folder_filter and folder_filter not in pst_folder:
                 continue
 
-            result = self.ingest_eml_dir(eml_path.parent, pst_folder)
-            total_docs += result["docs_processed"]
-            total_errors += result["errors"]
-            processed += result["docs_processed"]
+            try:
+                status = self._process_eml(eml_path, pst_folder)
+                if status == "processed":
+                    docs_processed += 1
+                else:
+                    skipped += 1
+            except Exception:
+                errors += 1
 
-        return {"docs_processed": total_docs, "errors": total_errors}
+        return {"docs_processed": docs_processed, "errors": errors, "skipped": skipped}
 
     def ingest_eml_dir(self, eml_dir: Path, pst_folder: str = "Root") -> dict:
         self.source_dir.mkdir(parents=True, exist_ok=True)
@@ -112,18 +116,32 @@ class PstIngestor:
 
         docs_processed = 0
         errors = 0
+        skipped = 0
 
         for eml_path in sorted(eml_dir.glob("*.eml")):
             try:
-                self._process_eml(eml_path, pst_folder)
-                docs_processed += 1
-            except Exception as e:
+                status = self._process_eml(eml_path, pst_folder)
+                if status == "processed":
+                    docs_processed += 1
+                else:
+                    skipped += 1
+            except Exception:
                 errors += 1
 
-        return {"docs_processed": docs_processed, "errors": errors}
+        return {"docs_processed": docs_processed, "errors": errors, "skipped": skipped}
 
-    def _process_eml(self, eml_path: Path, pst_folder: str) -> None:
+    def _process_eml(self, eml_path: Path, pst_folder: str) -> str:
         parsed = parse_eml(eml_path)
+        candidate = Document(
+            uuid=f"candidate-{uuid.uuid4().hex}",
+            doc_type="email",
+            source="pst",
+            created_at=_now(),
+            message_id=parsed["message_id"] or None,
+        )
+        if self.store.find_duplicate(candidate):
+            return "skipped"
+
         eid = uuid.uuid4().hex[:12]
         safe_subj = _sanitize(parsed["subject"], 60)
         email_stem = f"{eid}_{safe_subj}"
@@ -192,3 +210,4 @@ class PstIngestor:
             self.store.insert(att_doc, commit=False)
 
         self.store.conn.commit()
+        return "processed"
